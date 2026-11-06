@@ -1,0 +1,1856 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>知识库问答演示 · RAG 全流程</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#f6f8fb; --card:#fff; --line:#e5eaf2; --line-2:#eef2f7;
+    --ink:#1b2333; --ink-2:#3d4a5e; --sub:#6b7a90; --hint:#9aa8bb;
+    --blue:#2563eb; --blue-d:#1d4ed8; --blue-l:#eff5ff;
+    --green:#16a34a; --green-l:#f0fdf4;
+    --shadow:0 1px 2px rgba(16,32,64,.04), 0 4px 12px rgba(16,32,64,.04);
+    --shadow-lg:0 12px 32px rgba(16,32,64,.12), 0 2px 8px rgba(16,32,64,.06);
+  }
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--ink);font-size:13.5px;line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-thumb{background:#d3dbe8;border-radius:4px}
+  ::-webkit-scrollbar-thumb:hover{background:#bcc7d8}
+  ::-webkit-scrollbar-track{background:transparent}
+
+  header{background:#fff;border-bottom:1px solid var(--line);padding:0 20px;height:58px;display:flex;align-items:center;gap:12px}
+  .logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#2563eb,#4f8ef7);color:#fff;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;letter-spacing:-.5px;flex:0 0 auto}
+  header h1{font-size:14px;font-weight:600;letter-spacing:.2px;line-height:1.3}
+  header .sub{font-size:11px;color:var(--hint);letter-spacing:.2px;line-height:1.4}
+  header .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .btn{background:var(--blue);border:1px solid var(--blue);color:#fff;border-radius:7px;padding:7px 15px;font-size:12.5px;cursor:pointer;font-family:inherit;transition:.15s;font-weight:500}
+  .btn:hover{background:var(--blue-d);border-color:var(--blue-d)}
+  .btn.ghost{background:#fff;border-color:var(--line);color:var(--ink-2)}
+  .btn.ghost:hover{background:#f8fafc;border-color:#cfdaea;color:var(--ink)}
+
+  .api{position:fixed;top:66px;right:14px;width:372px;max-height:calc(100vh - 86px);overflow:auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;z-index:80;box-shadow:var(--shadow-lg);display:none}
+  .api.on{display:block}
+  .api .hd{display:flex;align-items:center;margin-bottom:4px}
+  .api .hd b{font-size:13px;color:var(--ink)}
+  .api .hd .x{margin-left:auto;background:none;border:none;color:var(--hint);cursor:pointer;font-size:18px;line-height:1;padding:0}
+  .api .hd .x:hover{color:var(--ink)}
+  .api label{display:block;font-size:11px;color:var(--sub);margin:10px 0 4px;letter-spacing:.2px}
+  .api select,.api input{width:100%;background:#fafbfd;border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:7px 9px;font-size:12px;font-family:inherit;box-sizing:border-box;transition:.15s}
+  .api select:focus,.api input:focus{outline:none;border-color:var(--blue);background:#fff;box-shadow:0 0 0 3px rgba(37,99,235,.08)}
+  .api .tip{font-size:11px;color:var(--hint);line-height:1.75;margin-top:12px;background:#fafbfd;border-radius:6px;padding:9px 11px}
+  .api .tip code{background:#eef2f7;color:#3d4a5e;padding:1px 4px;border-radius:3px;font-size:10.5px}
+  .api .foot{position:sticky;bottom:-16px;background:#fff;margin:16px -16px -16px;padding:12px 16px 16px;border-top:1px solid var(--line-2);box-shadow:0 -6px 12px rgba(255,255,255,.9)}
+  .api .row{display:flex;gap:8px}
+  .api .clearrow{display:flex;align-items:center;gap:8px;margin-top:10px}
+  .api .clearrow span{font-size:10.5px;color:var(--hint)}
+  .api .row button{flex:1;padding:8px 0;background:var(--blue);border:1px solid var(--blue);color:#fff;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit}
+  .api .row button.ghost{background:#fff;border-color:var(--line);color:var(--ink-2)}
+  .api button.mini{background:#fff;border:1px solid var(--line);color:var(--blue);border-radius:5px;padding:2px 8px;font-size:10.5px;margin-left:6px;cursor:pointer;font-family:inherit;font-weight:400;vertical-align:middle;letter-spacing:0}
+  .api button.mini:hover{border-color:var(--blue);background:var(--blue-l)}
+  .api button.mini:disabled{color:var(--hint);cursor:wait}
+  .api .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+  .api .chips span{font-size:10.5px;color:var(--blue);background:var(--blue-l);border:1px solid #dbe7ff;border-radius:5px;padding:2px 7px;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .api .chips span:hover{background:#e2edff}
+  .api .chips span.emb{color:#15803d;background:#f0fdf4;border-color:#bbf7d0}
+  .api .chips span.emb:hover{background:#dcfce7}
+  .api .chips .none{font-size:10.5px;color:var(--hint);border:none;background:none;cursor:default}
+  .api .sec{border:1px solid var(--line);border-radius:10px;padding:11px 12px;margin-top:10px;background:#fcfdff}
+  .api .sec-t{font-size:12px;color:var(--ink);font-weight:600;margin-bottom:2px;display:flex;align-items:center}
+  .api .sec-t .mini{margin-left:auto;margin-right:0}
+
+  main{display:grid;grid-template-columns:296px minmax(0,1fr) 286px;height:calc(100vh - 58px)}
+  .col{overflow:auto;padding:16px}
+  .col.docs{background:#fff;border-right:1px solid var(--line)}
+  .col.mid{background:var(--bg);padding:18px 20px}
+  .col.pipe{background:#fff;border-left:1px solid var(--line)}
+
+  h3{font-size:11.5px;color:var(--sub);font-weight:600;margin-bottom:11px;display:flex;align-items:center;gap:10px}
+  .hdbtn{background:none;border:none;color:var(--hint);font-size:11px;cursor:pointer;font-family:inherit;padding:0;letter-spacing:0;text-transform:none;transition:.15s}
+  .hdbtn:hover{color:var(--blue)}
+
+  .doc{border:1px solid var(--line);border-radius:8px;padding:9px 11px;margin-bottom:7px;cursor:pointer;transition:.15s;background:#fff}
+  .doc:hover{border-color:#c9d9f5}
+  .doc.on{border-color:#c9d9f5}
+  .doc .t{font-size:12.5px;font-weight:600;margin-bottom:2px;color:var(--ink)}
+  .doc .n{font-size:11px;color:var(--hint);font-variant-numeric:tabular-nums}
+
+  .upbtn{flex:1;background:#fff;border:1px solid var(--line);color:var(--ink-2);border-radius:7px;padding:7px 0;font-size:12.5px;cursor:pointer;font-family:inherit;transition:.15s;font-weight:500}
+  .upbtn:hover{background:var(--blue-d)}
+  .vecbtn{width:100%;background:#fff;border:1px solid #d6dfec;color:var(--ink-2);border-radius:7px;padding:7px 0;font-size:12px;cursor:pointer;font-family:inherit;transition:.15s;margin-bottom:12px;font-weight:500}
+  .vecbtn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-l)}
+  .vecbtn:disabled{cursor:not-allowed;color:var(--hint);border-color:var(--line)}
+  .stats{display:flex;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+  .stats span{font-size:11.5px;color:var(--hint)}
+  .stats b{color:var(--ink);font-variant-numeric:tabular-nums;margin-left:2px}
+
+  .ask{display:flex;gap:8px;margin-bottom:12px}
+  .ask input{flex:1;border:1px solid var(--line);border-radius:9px;padding:11px 14px;font-size:13.5px;font-family:inherit;background:#fff;transition:.15s;color:var(--ink)}
+  .ask input::placeholder{color:var(--hint)}
+  .ask input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.08)}
+  .ask button{background:var(--blue);border:none;color:#fff;border-radius:9px;padding:0 22px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:500;transition:.15s}
+  .ask button:hover{background:var(--blue-d)}
+  .ask button:disabled{background:#c7d3e3;cursor:not-allowed}
+
+  .rwbar{margin:-4px 0 10px;font-size:12px;color:var(--sub);display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .rwbar label{display:flex;align-items:center;gap:7px;cursor:pointer}
+  .rwbar .hist{font-size:11px;color:var(--hint);white-space:nowrap}
+  .rwbar .hist button{background:none;border:none;color:var(--blue);font-size:11px;cursor:pointer;font-family:inherit;padding:0 0 0 4px}
+  .rwbar input{margin:0;cursor:pointer;accent-color:var(--blue)}
+  .rwbar span{color:var(--hint);font-size:11px}
+  .rwline{background:#fff;border:1px solid #dbe7ff;border-left:3px solid var(--blue);border-radius:0 7px 7px 0;padding:9px 13px;font-size:12.5px;color:var(--ink-2);margin-bottom:10px;line-height:1.65}
+  .rwline b{color:var(--blue-d);font-weight:600}
+  .rwline s{color:var(--hint);text-decoration:none}
+
+  .samples{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+  .samples span{font-size:11.5px;color:var(--sub);background:#fff;border:1px solid var(--line);border-radius:16px;padding:4px 12px;cursor:pointer;transition:.15s}
+  .samples span:hover{color:var(--blue);border-color:#c9d9f5;background:var(--blue-l)}
+
+  .box{background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:12px;overflow:hidden;box-shadow:var(--shadow)}
+  .box>.h{background:#fff;border-bottom:1px solid var(--line-2);padding:10px 15px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;color:var(--ink)}
+  .box>.h .badge{font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;background:var(--blue-l);color:var(--blue);letter-spacing:.2px}
+  .box>.h .r{margin-left:auto;font-weight:400;color:var(--hint);font-size:11px;font-variant-numeric:tabular-nums}
+  .box>.c{padding:14px 16px}
+
+  .hit{padding:11px 0;border-bottom:1px solid var(--line-2)}
+  .hit:last-child{border-bottom:none}
+  .hit:first-child{padding-top:0}
+  .hit .top{display:flex;align-items:center;gap:9px;margin-bottom:6px}
+  .hit .rk{width:14px;color:var(--hint);font-size:11px;text-align:left;flex:0 0 auto;font-variant-numeric:tabular-nums}
+  .hit .src{font-size:12px;font-weight:600;color:var(--ink);line-height:1.4}
+  .hit .sc{margin-left:auto;font-size:11px;color:var(--sub);background:#f4f7fb;border-radius:5px;padding:2px 8px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .bar{height:3px;background:#eef2f7;border-radius:2px;overflow:hidden;margin:6px 0 8px}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,#34d399,#16a34a);border-radius:2px;transition:.5s}
+  .hit .txt{font-size:12.5px;color:var(--ink-2);line-height:1.8}
+  mark{background:#fff3bf;color:#7c4a03;padding:0 1px;border-radius:2px}
+
+  .ans{font-size:13.5px;line-height:1.9;color:var(--ink)}
+  .ans b{font-weight:600;color:var(--ink)}
+  .ans .md-h{font-size:13px;font-weight:600;color:var(--ink);margin:10px 0 4px}
+  .ans .md-ul{list-style:none;margin:7px 0;padding:0}
+  .ans .md-ul li{position:relative;padding-left:16px;margin:4px 0;line-height:1.8}
+  .ans .md-ul li::before{content:"";position:absolute;left:4px;top:11px;width:4px;height:4px;border-radius:50%;background:#b9c6d8}
+  .ans .md-gap{height:9px}
+  .ans .note{font-size:11.5px;color:var(--sub);background:#f8fafc;border-radius:7px;padding:9px 12px;margin-top:11px;line-height:1.75}
+  .ans .fallback{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 2px}
+  .ans .fallback span{font-size:12px;color:var(--blue);background:var(--blue-l);border:1px solid #dbe7ff;border-radius:16px;padding:5px 13px;cursor:pointer;transition:.15s}
+  .ans .fallback span:hover{background:#e2edff;border-color:#b9d4ff}
+
+  pre.prompt{background:#f7f9fc;color:#3d4a5e;border:1px solid var(--line);padding:14px 16px;border-radius:9px;font-size:11.5px;line-height:1.75;overflow-x:auto;font-family:"JetBrains Mono",Consolas,Monaco,monospace;white-space:pre-wrap;margin:0 16px 14px}
+  pre.prompt .k{color:#7dd3fc;font-weight:600}
+
+  .step{display:flex;gap:11px;padding:11px 0;position:relative}
+  .step:not(:last-child)::after{content:"";position:absolute;left:9.5px;top:31px;bottom:-11px;width:1px;background:#e6edf7}
+  .step .i{flex:0 0 20px;height:20px;border-radius:50%;background:#fff;color:var(--hint);font-size:10.5px;text-align:center;line-height:18px;font-weight:700;position:relative;z-index:1;border:1px solid #dbe3ee}
+  .step.on .i{background:var(--blue);color:#fff;border-color:var(--blue)}
+  .step .b b{display:block;color:var(--ink);font-size:12px;margin-bottom:2px;font-weight:600}
+  .step .b span{color:var(--sub);font-size:11.5px;line-height:1.6;display:block}
+  .step.on .b b{color:var(--blue-d)}
+
+  .empty{color:var(--hint);text-align:center;padding:28px 16px;font-size:12.5px;line-height:1.8}
+  .guide{text-align:center;padding:150px 24px 120px}
+  .guide svg{margin-bottom:18px}
+  .guide-t{font-size:14px;font-weight:600;color:var(--ink-2);margin-bottom:7px}
+  .guide-s{font-size:12.5px;color:var(--sub);line-height:1.8;max-width:420px;margin:0 auto 20px}
+  .guide-h{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+  .guide-h span{font-size:11.5px;color:var(--hint);background:#f4f7fb;border-radius:14px;padding:4px 12px}
+  .guide-h i{width:14px;height:1px;background:#dbe3ee;display:block}
+
+  .toast{position:fixed;top:70px;left:50%;transform:translateX(-50%) translateY(-70px);background:#1b2333;color:#fff;padding:9px 18px;border-radius:8px;font-size:12.5px;opacity:0;transition:.28s;z-index:99;box-shadow:var(--shadow-lg);pointer-events:none}
+  .toast.on{transform:translateX(-50%) translateY(0);opacity:1}
+
+  /* 对话窗 */
+  .col.mid{background:var(--bg);padding:0;display:flex;flex-direction:column;overflow:hidden}
+  .chat{flex:1;display:flex;flex-direction:column;min-height:0}
+  .chat-top{display:flex;align-items:center;gap:10px;padding:11px 18px;background:#fff;border-bottom:1px solid var(--line)}
+  .chat-top .av{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#5b9cf8);color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .chat-top .who b{display:block;font-size:13px;line-height:1.3;font-weight:600}
+  .chat-top .who span{font-size:11px;color:var(--hint)}
+  .chat-tools{margin-left:auto;display:flex;align-items:center;gap:12px}
+  .chat-tools .sw{font-size:11.5px;color:var(--sub);display:flex;align-items:center;gap:5px;cursor:pointer}
+  .chat-tools .sw input{accent-color:var(--blue);cursor:pointer;margin:0}
+  .chat-tools .hist{font-size:11px;color:var(--hint)}
+  .chat-tools .hist button{background:none;border:none;color:var(--blue);cursor:pointer;font-family:inherit;font-size:11px;padding:0 0 0 4px}
+
+  .thread{flex:1;overflow-y:auto;padding:18px 18px 6px;min-height:0}
+  .msg{display:flex;gap:9px;margin-bottom:15px;align-items:flex-start}
+  .msg .av{width:28px;height:28px;border-radius:50%;flex:0 0 auto;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center}
+  .msg.bot .av{background:#e8f0ff;color:#2563eb}
+  .msg.me{flex-direction:row-reverse}
+  .msg.me .av{background:#dde5f0;color:#5b6b80}
+  .msg .bub{max-width:80%}
+  .msg .say{background:#fff;border:1px solid var(--line);border-radius:3px 11px 11px 11px;padding:10px 14px;font-size:13.5px;line-height:1.85;color:var(--ink);box-shadow:var(--shadow);word-break:break-word}
+  .msg.me .say{background:var(--blue);border-color:var(--blue);color:#fff;border-radius:11px 3px 11px 11px;box-shadow:none}
+  .msg .t{font-size:10.5px;color:var(--hint);margin-top:5px;padding:0 2px}
+  .msg.me .t{text-align:right}
+  .msg .say .md-ul{list-style:none;margin:6px 0;padding:0}
+  .msg .say .md-ul li{position:relative;padding-left:16px;margin:3px 0;line-height:1.8}
+  .msg .say .md-ul li::before{content:"";position:absolute;left:4px;top:11px;width:4px;height:4px;border-radius:50%;background:#b9c6d8}
+  .msg .say .md-gap{height:8px}
+  .msg.me .say .md-ul li::before{background:rgba(255,255,255,.6)}
+  .msg .say b{font-weight:600}
+  .msg.bot .say b{color:#0f172a}
+  .msg .say .note{font-size:11.5px;color:var(--sub);background:#f8fafc;border-radius:7px;padding:8px 11px;margin-top:9px;line-height:1.7;border:1px solid var(--line-2)}
+  .msg .say .fallback{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 2px}
+  .msg .say .fallback span{font-size:12px;color:var(--blue);background:var(--blue-l);border:1px solid #dbe7ff;border-radius:15px;padding:4px 12px;cursor:pointer;transition:.15s}
+  .msg .say .fallback span:hover{background:#e2edff}
+  .typing{display:inline-flex;gap:4px;align-items:center;height:16px}
+  .typing i{width:5px;height:5px;border-radius:50%;background:#b9c6d8;animation:bl 1.2s infinite}
+  .typing i:nth-child(2){animation-delay:.2s}
+  .typing i:nth-child(3){animation-delay:.4s}
+  @keyframes bl{0%,60%,100%{opacity:.25}30%{opacity:1}}
+
+  .col.mid .samples{padding:0 18px 8px;margin:0}
+  .composer{display:flex;gap:8px;padding:10px 18px 14px;background:#fff;border-top:1px solid var(--line)}
+  .composer input{flex:1;border:1px solid var(--line);border-radius:9px;padding:10px 14px;font-size:13.5px;font-family:inherit;background:#fafbfd;color:var(--ink)}
+  .composer input::placeholder{color:var(--hint)}
+  .composer input:focus{outline:none;border-color:var(--blue);background:#fff;box-shadow:0 0 0 3px rgba(37,99,235,.08)}
+  .composer button{background:var(--blue);border:none;color:#fff;border-radius:9px;padding:0 22px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:500;transition:.15s}
+  .composer button:hover{background:var(--blue-d)}
+  .composer button:disabled{background:#c7d3e3;cursor:not-allowed}
+
+  .tech{flex:0 0 auto;max-height:50%;display:flex;flex-direction:column;background:#fff;border-top:1px solid var(--line);transition:opacity .2s}
+  .tech.dim{opacity:.5}
+  .tech-h{display:flex;align-items:center;gap:8px;padding:9px 18px;cursor:pointer;user-select:none}
+  .tech-h .tt{font-size:11px;color:var(--sub);font-weight:600;letter-spacing:.6px}
+  .tech-h .badge{font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;background:var(--blue-l);color:var(--blue);letter-spacing:.2px}
+  .tech-h .r{margin-left:auto;font-size:10.5px;color:var(--hint);font-variant-numeric:tabular-nums}
+  .tech-h .tg{font-size:11px;color:var(--blue);flex:0 0 auto}
+  .tech-b{overflow:auto;padding:2px 18px 16px;border-top:1px solid var(--line-2)}
+  .tech-b .prompt-t{font-size:10.5px;color:var(--hint);margin:12px 0 6px}
+  .tech-b .hit-note{font-size:10.5px;color:var(--hint);margin:9px 0 2px;line-height:1.6}
+  .tech-b .hit{padding:10px 0}
+  .tech-b pre.prompt{margin:0;max-height:none}
+  .tech-b details.pd{margin:12px 0 0}
+  .tech-b details.pd summary{font-size:10.5px;color:var(--blue);cursor:pointer;outline:none;margin-bottom:6px}
+  .tech-b details.pd summary:hover{text-decoration:underline}
+
+  /* 视角切换 */
+  .views{display:flex;gap:2px;background:#eef2f7;border-radius:8px;padding:2px;margin-left:auto}
+  .views button{border:none;background:none;font-family:inherit;font-size:12px;color:var(--sub);padding:5px 13px;border-radius:6px;cursor:pointer;transition:.15s;white-space:nowrap}
+  .views button:hover{color:var(--ink)}
+  .views button.on{background:#fff;color:var(--ink);font-weight:600}
+  header .right{margin-left:12px}
+
+  .col.side h3{font-size:11px;color:var(--sub);font-weight:600;letter-spacing:.8px;margin-bottom:10px;text-transform:uppercase}
+  .crow{display:flex;font-size:12.5px;line-height:1.5;padding:5px 0;border-bottom:1px dashed #eef2f7}
+  .crow span{color:var(--hint);flex:0 0 62px}
+  .crow b{font-weight:500;color:var(--ink);text-align:right;flex:1}
+  .crow b.ok{color:var(--green)}
+  .crow b.warn{color:#d97706}
+  .sbtn{width:100%;background:#fff;border:1px solid var(--line);color:var(--ink-2);border-radius:7px;padding:8px 0;font-size:12.5px;font-family:inherit;cursor:pointer;margin-bottom:7px;transition:.15s}
+  .sbtn:hover{border-color:#c9d9f5;background:var(--blue-l);color:var(--blue)}
+  .sbtn.urgent{border-color:#f0b37e;background:#fff7ed;color:#c2410c}
+  .sbtn.urgent:hover{background:#ffedd5;border-color:#e79a5a}
+
+  /* 客户侧：只剩聊天窗 */
+  body[data-view="client"] .col.docs,
+  body[data-view="client"] .col.pipe,
+  body[data-view="client"] .col.side,
+  body[data-view="client"] .tech,
+  body[data-view="client"] .chat-tools,
+  body[data-view="client"] header .right{display:none!important}
+  body[data-view="client"] .col.mid .chat-top{border-bottom:none;padding-bottom:4px}
+  body[data-view="client"] main{grid-template-columns:1fr;padding:22px;background:#eef2f7}
+  body[data-view="client"] .col.mid{max-width:760px;width:100%;margin:0 auto;height:100%;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 12px 34px rgba(16,32,64,.10)}
+  body[data-view="client"] .msg .say{box-shadow:none;background:#f6f8fb;border-color:#eef2f7}
+  body[data-view="client"] .msg.me .say{background:var(--blue);border-color:var(--blue)}
+  body[data-view="client"] .samples{padding-top:4px}
+
+  /* 坐席工作台：隐藏知识库与流程，露出客户资料 */
+  body[data-view="agent"] .col.docs,
+  body[data-view="agent"] .col.pipe{display:none!important}
+  body[data-view="agent"] .col.side{display:block}
+  body[data-view="agent"] main{grid-template-columns:minmax(0,1fr) 300px}
+  body[data-view="agent"] .chat-tools .sw{display:none}
+
+  /* 会话列表（坐席） */
+  .col.list{display:none;background:#fff;border-right:1px solid var(--line);padding:0;overflow:auto}
+  .ltabs{display:flex;gap:16px;padding:14px 16px 10px;border-bottom:1px solid var(--line-2)}
+  .ltabs span{font-size:12.5px;color:var(--sub)}
+  .ltabs span.on{color:var(--ink);font-weight:600}
+  .litem{display:flex;gap:9px;padding:11px 14px;border-bottom:1px solid var(--line-2);cursor:pointer}
+  .litem:hover{background:#fafbfd}
+  .litem.on{background:var(--blue-l)}
+  .lav{width:30px;height:30px;border-radius:50%;background:#e8eef7;color:#5b6b80;font-size:12px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .lb{flex:1;min-width:0}
+  .ln{font-size:12.5px;font-weight:600;margin-bottom:2px}
+  .ln i{font-style:normal;font-weight:400;font-size:10px;color:var(--hint);border:1px solid var(--line);border-radius:3px;padding:0 4px;margin-left:3px}
+  .lp{font-size:11.5px;color:var(--hint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lm{font-size:10.5px;color:var(--hint);flex:0 0 auto}
+  .sysline{text-align:center;font-size:11px;color:var(--hint);margin:10px 0 14px}
+  .ltabs b{font-weight:600;color:var(--ink);margin-left:2px}
+  .lqueue{padding:12px 14px}
+  .qt{font-size:11px;color:var(--hint);margin-bottom:6px}
+  .qi{font-size:11.5px;color:var(--sub);padding:4px 0}
+
+  /* 坐席右栏 */
+  .col.side{display:none;background:#fff;border-left:1px solid var(--line);padding:16px 18px;overflow:auto}
+  .tags{display:flex;flex-wrap:wrap;gap:6px}
+  .tags span{font-size:11px;color:var(--sub);border:1px solid var(--line);border-radius:4px;padding:2px 7px}
+  .memo{font-size:12px;color:var(--ink-2);line-height:1.7;background:#fafbfd;border-radius:6px;padding:9px 11px}
+
+  /* 头部动作 */
+  .chat-actions{display:none;margin-left:auto;gap:6px}
+  .chat-actions button{background:#fff;border:1px solid var(--line);border-radius:6px;padding:5px 10px;font-size:11.5px;color:var(--ink-2);cursor:pointer;font-family:inherit}
+  .chat-actions button:hover{border-color:#c9d9f5;color:var(--blue)}
+  .chat-actions button.urgent{border-color:#f0b37e;background:#fff7ed;color:#c2410c}
+  .wfoot{display:none;text-align:center;font-size:10.5px;color:var(--hint);padding:0 0 9px;background:#fff}
+
+  .site{display:none}
+  body[data-view="client"] .site{display:block;position:absolute;inset:0;background:#fff;overflow:auto}
+  body[data-view="client"] main{position:relative}
+  .snav{display:flex;align-items:center;gap:28px;padding:18px 48px;border-bottom:1px solid #eef2f7}
+  .slogo{font-size:15px;font-weight:600;letter-spacing:.5px}
+  .smenu{display:flex;gap:22px;font-size:13px;color:#5b6b80}
+  .sright{margin-left:auto;font-size:13px;color:#5b6b80}
+  .shero{padding:72px 48px 40px;max-width:760px}
+  .shero h1{font-size:34px;line-height:1.35;font-weight:600;letter-spacing:.5px;margin-bottom:14px;color:#111827}
+  .shero p{font-size:14px;color:#6b7a90;line-height:1.9;margin-bottom:26px}
+  .sbtns{display:flex;gap:10px}
+  .sbtns span{font-size:13px;border:1px solid #dfe6ef;border-radius:6px;padding:9px 20px;color:#3d4a5e}
+  .sbtns span.p{background:#2563eb;border-color:#2563eb;color:#fff}
+  .scards{display:flex;gap:18px;padding:20px 48px 0;max-width:1060px}
+  .scard{flex:1;border:1px solid #eef2f7;border-radius:10px;padding:22px 20px}
+  .scard h4{font-size:13px;color:#6b7a90;font-weight:500;margin-bottom:10px}
+  .scard .sp{font-size:24px;font-weight:600;color:#111827;margin-bottom:12px}
+  .scard .sp span{font-size:12px;color:#9aa8bb;font-weight:400;margin-left:3px}
+  .scard p{font-size:12.5px;color:#6b7a90;line-height:1.9}
+  .sfoot{padding:40px 48px;font-size:12px;color:#9aa8bb}
+  body[data-view="client"] .col.mid{z-index:3}
+
+  .vswitch{display:none}
+  body[data-view="client"] .vswitch{display:flex;position:fixed;left:24px;bottom:24px;gap:2px;background:rgba(255,255,255,.94);border:1px solid var(--line);border-radius:8px;padding:3px;box-shadow:0 4px 14px rgba(16,32,64,.10);z-index:9}
+  .vswitch button{border:none;background:none;font-family:inherit;font-size:11.5px;color:var(--sub);padding:4px 10px;border-radius:5px;cursor:pointer}
+  .vswitch button.on{background:#eef2f7;color:var(--ink)}
+  body[data-view="client"] header{display:none}
+  body[data-view="client"] main{height:100vh}
+
+  /* 客户侧：右下角挂件 */
+  body[data-view="client"] .col.docs,
+  body[data-view="client"] .col.pipe,
+  body[data-view="client"] .col.list,
+  body[data-view="client"] .col.side,
+  body[data-view="client"] .tech,
+  body[data-view="client"] .chat-tools,
+  body[data-view="client"] header .right{display:none!important}
+  body[data-view="client"] main{display:block;padding:0;background:#eef2f7}
+  body[data-view="client"] .col.mid{position:absolute;right:24px;bottom:24px;width:400px;height:min(660px,calc(100vh - 110px));background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 16px 40px rgba(16,32,64,.14)}
+  body[data-view="client"] .wfoot{display:block}
+  body[data-view="client"] .chat-top{border-bottom:1px solid var(--line-2);padding:12px 16px}
+  body[data-view="client"] .thread{padding:16px 14px 6px}
+  body[data-view="client"] .msg.me .av{display:none}
+  body[data-view="client"] .msg .bub{max-width:82%}
+  body[data-view="client"] .msg .say{box-shadow:none;background:#f6f8fb;border-color:#eef2f7}
+  body[data-view="client"] .msg.me .say{background:var(--blue);border-color:var(--blue)}
+  body[data-view="client"] .samples{padding:0 14px 6px}
+  body[data-view="client"] .composer{padding:8px 12px 10px}
+
+  /* 坐席：三栏 */
+  body[data-view="agent"] .col.docs,
+  body[data-view="agent"] .col.pipe,
+  body[data-view="agent"] .tech{display:none!important}
+  body[data-view="agent"] .col.list{display:block}
+  body[data-view="agent"] .col.side{display:block}
+  body[data-view="agent"] .chat-actions{display:flex}
+  body[data-view="agent"] .chat-tools{display:none}
+  body[data-view="agent"] main{grid-template-columns:236px minmax(0,1fr) 288px}
+  body[data-view="agent"] .msg{flex-direction:row-reverse}
+  body[data-view="agent"] .msg.me{flex-direction:row}
+  body[data-view="agent"] .msg .say{background:var(--blue);border-color:var(--blue);color:#fff;border-radius:11px 3px 11px 11px;box-shadow:none}
+  body[data-view="agent"] .msg.me .say{background:#fff;border-color:var(--line);color:var(--ink);border-radius:3px 11px 11px 11px;box-shadow:var(--shadow)}
+  body[data-view="agent"] .msg.me .av{order:-1}
+  body[data-view="agent"] .msg .say b{color:#fff}
+  body[data-view="agent"] .msg .say .md-ul li::before{background:rgba(255,255,255,.6)}
+  body[data-view="agent"] .msg .t{text-align:right}
+  body[data-view="agent"] .msg.me .t{text-align:left}
+  body[data-view="agent"] .msg.me .av{background:#e8eef7;color:#5b6b80}
+  body[data-view="agent"] .samples{display:none}
+
+  @media (max-width:1180px){
+    main{grid-template-columns:260px minmax(0,1fr) 250px}
+  }
+</style>
+</head>
+<body>
+
+<div class="vswitch" id="vswitch">
+  <button data-v="client" onclick="setView('client')">客户</button>
+  <button data-v="agent" onclick="setView('agent')">坐席</button>
+  <button data-v="admin" onclick="setView('admin')">运维</button>
+</div>
+
+<header>
+  <div class="logo">R</div>
+  <div class="ttl">
+    <h1><span id="hd-title">知识库问答演示</span> <span id="hd-chip" style="display:none"></span></h1>
+    <div class="sub" id="hd-sub">RAG 全流程 · 切块 / 向量化 / 检索 / 拼装 / 生成</div>
+  </div>
+  <div class="views" id="views">
+    <button data-v="client" onclick="setView('client')">客户侧</button>
+    <button data-v="agent" onclick="setView('agent')">坐席工作台</button>
+    <button data-v="admin" onclick="setView('admin')">知识库运维</button>
+  </div>
+  <div class="right">
+    <button class="btn ghost" onclick="showApi()">接口设置</button>
+    <button class="btn ghost" onclick="reset()">重置</button>
+  </div>
+</header>
+
+<div class="api" id="api">
+  <div class="hd"><b>模型接口设置</b><button class="x" onclick="hideApi()">×</button></div>
+
+  <div class="sec">
+    <div class="sec-t">对话模型</div>
+    <label>服务商</label>
+    <select id="p-chat" onchange="pickPreset('chat')">
+      <option value="siliconflow">硅基流动 SiliconFlow</option>
+      <option value="sensenova">商汤 SenseNova</option>
+      <option value="deepseek">DeepSeek</option>
+      <option value="dashscope">阿里通义（兼容模式）</option>
+      <option value="zhipu">智谱 GLM</option>
+      <option value="openai">OpenAI</option>
+      <option value="ollama">本地 Ollama</option>
+      <option value="custom">自定义（任意 OpenAI 兼容）</option>
+    </select>
+    <label>Base URL</label>
+    <input id="base-chat" placeholder="https://token.sensenova.cn/v1" autocomplete="off">
+    <label>API Key</label>
+    <input id="key-chat" type="password" placeholder="sk-..." autocomplete="off">
+    <label>模型 <button class="mini" onclick="fetchModels('chat')">一键获取</button></label>
+    <input id="model-chat" placeholder="sensenova-6.8-flash-lite" autocomplete="off">
+    <div class="chips" id="chips-chat"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-t">向量模型（Embedding）
+      <button class="mini" onclick="copyChatToEmb()">同对话</button>
+    </div>
+    <label>服务商</label>
+    <select id="p-emb" onchange="pickPreset('emb')">
+      <option value="siliconflow">硅基流动 SiliconFlow</option>
+      <option value="dashscope">阿里通义（兼容模式）</option>
+      <option value="zhipu">智谱 GLM</option>
+      <option value="openai">OpenAI</option>
+      <option value="ollama">本地 Ollama</option>
+      <option value="custom">自定义（任意 OpenAI 兼容）</option>
+    </select>
+    <label>Base URL</label>
+    <input id="base-emb" placeholder="https://api.siliconflow.cn/v1" autocomplete="off">
+    <label>API Key</label>
+    <input id="key-emb" type="password" placeholder="sk-... 与服务商不同就单独填" autocomplete="off">
+    <label>模型 <button class="mini" onclick="fetchModels('emb')">一键获取</button></label>
+    <input id="model-emb" placeholder="BAAI/bge-m3" autocomplete="off">
+    <div class="chips" id="chips-emb"></div>
+  </div>
+
+  <div class="tip">两块可以填不同服务商：对话一家、向量另一家。模型名留空则退回本地 TF-IDF。<br>DeepSeek 没有 embedding 接口，向量那家要单独选。<br><b>商汤</b>的预检接口没开 CORS，浏览器直连会被拦。要么填 <code>http://127.0.0.1:8890/v1</code> 走本地代理，要么换一家。</div>
+  <div class="foot">
+    <div class="row"><button onclick="saveApi()">保存</button><button class="ghost" onclick="hideApi()">取消</button></div>
+    <div class="clearrow">
+      <button class="mini" style="margin:0" onclick="clearSecrets()">清除本机 Key 与向量缓存</button>
+      <span>演示前点一下</span>
+    </div>
+  </div>
+</div>
+
+<div id="demo-tip" style="display:none;position:fixed;top:66px;left:50%;transform:translateX(-50%);background:#1b2333;color:#fff;padding:8px 16px;border-radius:8px;font-size:12px;z-index:70;box-shadow:0 8px 20px rgba(16,32,64,.2);transition:opacity .4s"></div>
+
+<main>
+  <div class="col docs">
+    <h3>知识库
+      <span style="margin-left:auto;display:flex;gap:12px">
+        <button class="hdbtn" onclick="resetDocs()" title="恢复五份内置示例文档">示例</button>
+        <button class="hdbtn" onclick="clearDocs()">清空</button>
+      </span>
+    </h3>
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button class="upbtn" onclick="document.getElementById('up').click()">+ 上传文档</button>
+      <input id="up" type="file" accept=".txt,.md,.csv" multiple style="display:none" onchange="uploadDocs(event)">
+    </div>
+    <div class="stats">
+      <span>文档 <b id="s-doc">0</b></span>
+      <span>切块 <b id="s-chunk">0</b></span>
+      <span id="s-vec-wrap">向量 <b id="s-vec">未建</b></span>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button id="btn-vec" onclick="rebuildVectors()" class="vecbtn">建立向量索引</button>
+    </div>
+    <div id="doclist"></div>
+  </div>
+
+  <aside class="col list" id="col-list">
+    <div class="ltabs"><span class="on">会话中 <b id="n-active">3</b></span><span>排队 <b id="n-queue">2</b></span></div>
+    <div id="chatlist"></div>
+    <div class="lqueue">
+      <div class="qt">排队中</div>
+      <div id="queuelist"></div>
+    </div>
+  </aside>
+
+  <div class="site" id="site">
+    <div class="snav">
+      <div class="slogo">智云客服</div>
+    </div>
+    <div class="shero">
+      <h1>在线客服与工单系统</h1>
+      <p>官网、公众号、小程序的咨询，在一个后台处理。</p>
+    </div>
+    <div class="scards">
+      <div class="scard"><h4>基础版</h4><div class="sp">¥4800<span>/ 年</span></div><p>5 个坐席<br>2 万条会话 / 月</p></div>
+      <div class="scard"><h4>标准版</h4><div class="sp">¥12800<span>/ 年</span></div><p>20 个坐席<br>10 万条会话 / 月</p></div>
+      <div class="scard"><h4>专业版</h4><div class="sp">¥29800<span>/ 年</span></div><p>50 个坐席<br>50 万条会话 / 月</p></div>
+    </div>
+    <div class="sfoot">© 2026 智云客服 · 杭州云栖科技</div>
+  </div>
+
+  <div class="col mid">
+    <div class="chat">
+      <div class="chat-top">
+        <div class="av" id="peer-av">云</div>
+        <div class="who"><b id="peer-name">小云</b><span id="peer-sub">在线 · 通常 1 分钟内回复</span></div>
+        <div class="chat-actions" id="chat-actions">
+          <button id="btn-handoff" onclick="handoff()">转人工</button>
+          <button onclick="endChat()">结束会话</button>
+        </div>
+        <div class="chat-tools">
+          <label class="sw" title="把口语问题先改成检索式"><input type="checkbox" id="rw-on" onchange="toggleRW()"> 查询改写</label>
+          <span class="hist" id="hist-info"></span>
+        </div>
+      </div>
+
+      <div class="thread" id="thread"></div>
+
+      <div class="samples" id="samples"></div>
+
+      <div class="composer">
+        <input id="q" placeholder="请输入问题" onkeydown="if(event.key==='Enter')run()">
+        <button id="btn" onclick="run()">发送</button>
+      </div>
+      <div class="wfoot">由 智云客服 提供</div>
+    </div>
+
+    <div class="tech" id="tech">
+      <div class="tech-h" onclick="toggleTech()">
+        <span class="tt">检索调试</span>
+        <span class="badge" id="ans-badge">未开始</span>
+        <span class="r" id="ans-src"></span>
+        <span class="tg" id="tech-tg">展开</span>
+      </div>
+      <div class="tech-b" id="tech-b" style="display:none">
+        <div class="rwline" id="rw" style="display:none"></div>
+        <div class="hit-note" id="hit-r"></div>
+        <div id="hits"></div>
+        <details class="pd">
+          <summary>看发给模型的完整消息</summary>
+          <pre class="prompt" id="prompt"></pre>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <aside class="col side" id="col-side">
+    <h3>客户资料</h3>
+    <div class="crow"><span>企业</span><b id="sidebar-company">—</b></div>
+    <div class="crow"><span>联系人</span><b id="sidebar-name">—</b></div>
+    <div class="crow"><span>版本</span><b>标准版 · 20 坐席</b></div>
+    <div class="crow"><span>开通</span><b>2026-08-11</b></div>
+    <div class="crow"><span>来访</span><b id="sidebar-visits">第 1 次</b></div>
+    <div class="crow"><span>接待</span><b id="side-host">小云 · 自动</b></div>
+
+    <h3 style="margin-top:20px">标签</h3>
+    <div class="tags" id="sidebar-tags"><span>—</span></div>
+
+    <h3 style="margin-top:20px">备注</h3>
+    <div class="memo" id="sidebar-memo">—</div>
+
+    <h3 style="margin-top:20px">常用语</h3>
+    <button class="sbtn" onclick="fillReply('我把操作手册发给您，里面有截图，照着点就行。')">发操作手册</button>
+    <button class="sbtn" onclick="fillReply('这个问题我记下来了，稍后会有同事跟进。')">记录待跟进</button>
+    <button class="sbtn" onclick="fillReply('稍等，我确认一下再回复您。')">稍后回复</button>
+  </aside>
+
+  <div class="col pipe">
+    <h3>流程</h3>
+    <div id="steps"></div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ 知识库 ============ */
+const DOCS = [{"id": "s01", "title": "产品功能说明", "text": "# 智云客服系统 · 产品功能说明\n\n版本：V4.2　更新日期：2026-09-18　适用对象：售前、实施、客服主管\n\n## 一、产品定位\n\n智云客服是一套面向电商与本地生活商家的在线客服系统，把网页、公众号、小程序、抖音、电话五个渠道的咨询汇总到一个工作台。客服不用来回切后台，一个界面接待全部渠道。\n\n## 二、功能模块\n\n### 1. 会话工作台\n\n- 同时接待上限：默认 8 个会话，可在后台调到 20 个\n- 支持快捷回复、常用语分组、内部备注\n- 会话转接支持按技能组、按指定人两种方式\n- 历史会话保留 24 个月，超期归档到冷存储\n\n### 2. 智能机器人\n\n- 支持关键词匹配和语义匹配两种模式\n- 语义匹配需要开启向量检索，依赖知识库\n- 机器人可接管首轮咨询，转人工规则支持按关键词、按情绪、按等待时长\n- 机器人回答准确率在标准知识库下约为 82%\n\n### 3. 工单系统\n\n- 工单状态：待受理、处理中、待客户确认、已关闭\n- 支持 SLA 计时，超时自动升级到主管\n- 工单可关联订单号、客户档案、历史会话\n\n### 4. 数据看板\n\n- 核心指标：会话量、首次响应时长、平均处理时长、一次解决率、满意度\n- 数据延迟 5 分钟，支持导出 Excel\n- 自定义报表最多保存 20 个\n\n## 三、版本与配额\n\n| 版本 | 坐席数 | 月会话量 | 知识库条数 | 价格 |\n|---|---|---|---|---|\n| 基础版 | 5 | 2 万 | 500 | 4800 元/年 |\n| 标准版 | 20 | 10 万 | 3000 | 12800 元/年 |\n| 专业版 | 50 | 50 万 | 不限 | 29800 元/年 |\n| 私有化 | 不限 | 不限 | 不限 | 按项目报价 |\n\n超出会话量按 0.02 元/条计费，月底结算。\n\n## 四、接口能力\n\n- 开放接口采用 REST 风格，鉴权用 AppKey + AppSecret 签名\n- 单账号调用频率限制：每秒 20 次，超限返回 429\n- 提供 Webhook 推送，支持会话开始、会话结束、工单状态变更三类事件\n- 消息推送失败会重试 3 次，间隔分别为 5 秒、30 秒、5 分钟\n\n## 五、已知限制\n\n1. 语音电话渠道目前只支持呼入，不支持外呼\n2. 抖音渠道的消息延迟在高峰期可能达到 10 秒\n3. 知识库单条内容上限 5000 字，超过需要拆分\n4. 私有化部署不支持自动升级，需人工执行升级包\n5. 数据导出单次上限 5 万行\n\n## 六、客户端电脑配置与浏览器要求\n\n客服用的电脑有最低配置要求，低于这个标准，页面会卡顿、消息延迟、图片加载不出来。\n\n| 项 | 最低配置 | 推荐配置 |\n|---|---|---|\n| CPU | 双核 2.0GHz | 四核 2.5GHz |\n| 内存 | 8G | 16G |\n| 硬盘 | 120G 可用空间 | 256G 固态 |\n| 屏幕分辨率 | 1366×768 | 1920×1080 |\n| 网络 | 上下行 4Mbps | 20Mbps |\n\n浏览器要求：\n\n- 推荐 Chrome 100 以上，不支持 IE\n- 360、QQ 浏览器必须切到极速模式，兼容模式会白屏\n- 移动端管理后台支持微信小程序，功能仅限查看数据和回复会话\n\n配置不达标的表现：会话列表滚动卡顿、消息延迟超过 5 秒、上传附件失败。遇到这几种情况，先让客户换一台达标的电脑试，再判断是不是系统问题。"}, {"id": "s02", "title": "售后与退款政策", "text": "# 售后与退款政策\n\n生效日期：2026-07-01　适用范围：官网、直营店、授权经销商全渠道\n\n## 一、七天无理由退货\n\n客户签收之日起 7 个自然日内，商品未拆封、不影响二次销售的，可以申请无理由退货。\n\n以下品类不支持无理由退货：\n\n- 食品、生鲜、保健类\n- 贴身衣物、泳装，已洗涤或拆封的\n- 定制类商品，包括刻字、改尺寸\n- 数字商品，包括软件激活码、会员充值\n- 已拆封的消耗品，如墨盒、滤芯\n\n退货运费规则：无理由退货由客户承担往返运费；商品质量问题由商家承担。\n\n## 二、质量问题退换\n\n签收后 15 日内出现非人为损坏的性能故障，可以选择换货或退货。15 日至保修期内只换不退。\n\n判定标准：\n\n1. 外观无明显磕碰、进水、私拆痕迹\n2. 故障可复现，或经检测确认\n3. 提供订单号与故障描述，必要时提供视频\n\n检测周期为收到退货后 3 个工作日，检测结果会通过短信通知。\n\n## 三、退款到账时间\n\n| 支付方式 | 退款到账时间 |\n|---|---|\n| 微信支付 | 1 至 3 个工作日 |\n| 支付宝 | 1 至 3 个工作日 |\n| 银行卡 | 3 至 7 个工作日 |\n| 对公转账 | 5 至 10 个工作日 |\n| 花呗分期 | 3 至 5 个工作日，手续费不退 |\n\n退款原路返回，不支持退到其他账户。超过上述时间未到账，需要提供退款单号查询。\n\n## 四、保修政策\n\n- 整机保修 12 个月，主要部件 24 个月\n- 保修期从签收日算，不以开票日为准\n- 保修范围内免费维修，往返运费由商家承担\n- 人为损坏、进水、私自拆修不在保修范围，可付费维修\n- 维修更换的配件保修 90 天\n\n## 五、客户投诉受理\n\n### 客户提出投诉时的应答\n\n客户说\"我要投诉\"时，不要先解释、不要争辩，按这个顺序处理：\n\n1. 先接住情绪。原话可以是：「非常抱歉给您带来不好的体验，我现在就把情况记录下来。」\n2. 记录三样东西：订单号、问题发生的时间、客户想要的结果。\n3. 给出时限。承诺 2 小时内由专人回复，不要承诺当场解决。\n4. 客户坚持要向监管部门反映的，告知 12315 渠道，不阻拦、不拖延、不诱导撤诉。\n5. 涉及人身安全、媒体曝光的，立即升级售后经理，不走普通工单。\n\n### 内部上报路径\n\n一线客服 → 客服主管 → 售后经理 → 消费者协会。\n\n同一问题上报告两次仍未解决的，由售后经理在 24 小时内给出书面方案。\n\n客服首次响应时间承诺：\n\n- 在线咨询：工作时间内 30 秒内响应\n- 工单提交：2 小时内受理\n- 电话投诉：直接转主管\n\n## 六、发票\n\n- 支持电子普通发票和增值税专用发票\n- 下单时可备注，也可在订单完成后 90 天内申请补开\n- 电子发票在申请后 1 个工作日内发到预留邮箱\n- 专用发票需要提供完整开票资料，审核通过后 3 个工作日寄出\n- 退货后发票需退回或冲红，否则无法完成退款"}, {"id": "s03", "title": "部署与运维手册", "text": "# 部署与运维手册\n\n适用版本：V4.x　部署方式：私有化 / 混合云\n\n## 一、服务端服务器配置要求\n\n这一节说的是部署系统的服务器，不是客服办公用的电脑。客服电脑的要求见《产品功能说明》第六节。\n\n| 规模 | CPU | 内存 | 磁盘 | 说明 |\n|---|---|---|---|---|\n| 50 坐席以下 | 8 核 | 16G | 500G SSD | 单机部署 |\n| 50 至 200 坐席 | 16 核 | 32G | 1T SSD | 应用与数据库分离 |\n| 200 坐席以上 | 32 核 × 2 | 64G | 2T SSD | 双机热备 |\n\n操作系统：CentOS 7.9 / Ubuntu 20.04 及以上，内核 3.10 以上。\n\n## 二、端口清单\n\n| 端口 | 用途 | 是否对外开放 |\n|---|---|---|\n| 80 | HTTP，跳转 HTTPS | 是 |\n| 443 | HTTPS 主入口 | 是 |\n| 3306 | MySQL | 否 |\n| 6379 | Redis | 否 |\n| 8080 | 应用服务 | 否 |\n| 9090 | 监控指标 | 否 |\n\n防火墙只需放行 80 和 443，其余端口仅内网访问。\n\n## 三、部署步骤\n\n1. 安装基础依赖：JDK 17、MySQL 8.0、Redis 6.2、Nginx 1.20\n2. 导入初始化 SQL，创建业务库与只读账号\n3. 修改配置文件 `application-prod.yml`，填写数据库地址、Redis 地址、文件存储路径\n4. 启动应用：`sh bin/start.sh`，日志输出到 `logs/app.log`\n5. 配置 Nginx 反向代理，证书放到 `/etc/nginx/ssl/`\n6. 访问 `/health` 确认返回 `{\"status\":\"UP\"}`\n\n## 四、备份策略\n\n- 数据库每日凌晨 2 点全量备份，保留 30 天\n- 增量备份每小时一次，保留 7 天\n- 附件存储每周同步到对象存储\n- 每季度做一次恢复演练，演练记录归档\n\n备份文件必须存放在与生产不同的物理机器上。同一台机器上的备份不算备份。\n\n## 五、常见故障处理\n\n### 故障码 5001：数据库连接池耗尽\n\n现象：页面报错，日志出现 `Connection is not available`。\n处理：先查是否有慢查询，再看连接池配置。默认最大连接 50，坐席数超过 100 时建议调到 120。\n\n### 故障码 5002：Redis 连接超时\n\n现象：登录缓慢，会话状态丢失。\n处理：检查 Redis 内存使用率，超过 80% 会触发淘汰。执行 `redis-cli info memory` 查看。\n\n### 故障码 5003：磁盘空间不足\n\n现象：消息发送失败，图片上传报错。\n处理：清理 `/data/logs` 下 7 天前的日志，检查备份目录是否堆积。\n\n### 服务启动不了\n\n按顺序排查：进程是否残留（`ps -ef | grep java`）、端口是否被占用（`netstat -anp | grep 8080`）、配置文件是否有语法错误、日志最后 200 行有没有异常堆栈。\n\n## 六、升级流程\n\n1. 升级前做一次完整备份\n2. 停止应用，保留旧版本目录\n3. 解压升级包，执行数据库变更脚本\n4. 启动新版本，验证 `/health` 和核心页面\n5. 观察 30 分钟，无异常再清理旧版本\n\n升级窗口建议安排在业务低峰期，通常是晚上 22 点之后。回滚方式为切回旧目录并恢复数据库备份，回滚时间约 20 分钟。"}, {"id": "s04", "title": "员工手册", "text": "# 员工手册（2026 版）\n\n## 一、考勤\n\n- 上班时间 9:00，下班 18:00，午休 12:00 至 13:30\n- 弹性打卡：9:00 至 9:30 之间到岗不算迟到，相应顺延下班时间\n- 每月迟到累计 3 次以内不扣款，超过部分每次扣 50 元\n- 忘记打卡每月可补 3 次，需在 3 个工作日内提交\n- 外勤、出差需提前在系统提交申请，由直属主管审批\n\n## 二、请假\n\n| 类型 | 天数 | 是否带薪 | 提前申请 |\n|---|---|---|---|\n| 事假 | 按需 | 否 | 1 天 |\n| 病假 | 按需 | 是，需病假条 | 当天 |\n| 年假 | 5 至 15 天 | 是 | 3 天 |\n| 婚假 | 3 天 | 是 | 7 天 |\n| 产假 | 158 天 | 是 | 30 天 |\n| 陪产假 | 15 天 | 是 | 7 天 |\n| 丧假 | 1 至 3 天 | 是 | 当天 |\n\n年假按入职时间折算，工作满 1 年 5 天，满 3 年 8 天，满 5 年 12 天，满 10 年 15 天。当年未休完的年假可以顺延到次年 3 月底，过期作废。\n\n## 三、报销\n\n- 差旅：高铁二等座、经济舱，住宿标准一线城市 500 元/晚，其他城市 350 元/晚\n- 市内交通：实报实销，单次超过 100 元需说明事由\n- 招待费：需提前申请，单次上限 2000 元，附消费清单\n- 办公用品：单笔 500 元以下主管审批，以上需部门负责人审批\n- 报销单每月 15 日和月底各提交一次，财务在 5 个工作日内打款\n\n发票要求：抬头必须是公司全称，税号正确，电子发票需提供 PDF 原件。餐饮发票需注明人数和事由。\n\n## 四、加班与调休\n\n- 工作日加班按 1 倍时长调休\n- 休息日加班按 2 倍时长调休\n- 法定节假日加班支付 3 倍工资，不调休\n- 调休需在 3 个月内使用，过期作废\n- 加班需提前申请，事后补录不超过 3 天\n\n## 五、设备与账号\n\n- 入职领用电脑、显示器，离职时归还，损坏按折旧价赔偿\n- 公司邮箱、VPN、代码仓库账号在入职当天开通\n- 离职当天停用全部账号，设备归还后结算工资\n- 禁止将公司账号借给他人使用，违反按严重违纪处理\n\n## 六、保密与竞业\n\n- 客户名单、报价单、源代码属于保密信息，离职后仍需保密\n- 不得私自将客户数据导出到个人设备\n- 竞业限制仅适用于核心岗位，期限 12 个月，按月支付补偿金\n- 违反保密义务造成损失的，公司保留追责权利\n\n## 七、常用联系方式\n\n- 人事：分机 8001，邮箱 hr@example.com\n- 财务报销：分机 8002\n- IT 支持：分机 8003，或提交工单\n- 行政前台：分机 8000"}, {"id": "s05", "title": "客户常见问题", "text": "# 客户常见问题\n\n## 账号相关\n\n**Q：账号可以几个人一起用吗？**\nA：不行。一个账号对应一个人，共用会导致操作日志混乱，出问题查不到是谁改的。坐席不够请购买加坐席。\n\n**Q：忘记密码怎么办？**\nA：在登录页点「忘记密码」，用绑定手机号收验证码重置。手机号换了需要主管在后台改，客服无权直接改。\n\n**Q：账号被锁定了多久能解开？**\nA：连续输错 5 次密码锁定 30 分钟，到时自动解锁。急着用可以让管理员在后台手动解锁。\n\n## 使用相关\n\n**Q：机器人回答不准怎么办？**\nA：先看知识库有没有覆盖这个问题。没有就补一条，有的检查表述是否和客户问法差太远。机器人按语义匹配，同义句一般能命中，但行业黑话需要单独加。\n\n**Q：能不能导出聊天记录？**\nA：可以。会话列表右上角有导出按钮，选时间范围导出 Excel。单次上限 5 万行，超过分批导。\n\n**Q：聊天记录保存多久？**\nA：在线保留 24 个月，超过之后归档到冷存储，需要调阅要提工单，1 个工作日内给结果。\n\n**Q：能不能接我们自己的系统？**\nA：可以。开放接口用 AppKey 签名，能拉会话、推工单、查客户档案。接口文档在后台「开发者中心」下载。\n\n## 计费相关\n\n**Q：超出套餐的会话怎么算？**\nA：按 0.02 元一条，月底统一结算。超出前会有短信提醒，到 120% 会限流。\n\n**Q：能不能按年付费打折？**\nA：标准版和专业版按年付送 2 个月，私有化项目按合同约定。\n\n**Q：中途升级版本怎么算差价？**\nA：按剩余月份折算，补差价即可，不额外收手续费。降级需要等到当前周期结束。\n\n## 故障相关\n\n**Q：系统打不开，页面一直转圈**\nA：先确认网络是否正常，换个浏览器试。都不行的话看是不是公司网络限制了 443 端口，或者联系客服查服务状态。\n\n**Q：消息发出去客户收不到**\nA：先看渠道状态，公众号和小程序需要授权未过期。再看是否触发了内容拦截，含敏感词的消息会被拦下不发送。\n\n**Q：语音通话有杂音**\nA：检查麦克风和外放是否离太近，会产生回声。建议戴耳机。网络抖动超过 5% 也会有断续。\n\n**Q：数据看板数字和实际对不上**\nA：看板数据延迟 5 分钟，先等一会刷新。还是不对的话，检查是否有跨天会话被算到了前一天。\n\n## 投诉与情绪\n\n**Q：客户骂人、情绪激动怎么处理？**\nA：先接住情绪，不辩解、不打断。说一句「非常抱歉，我先帮您把问题记下来」。然后问清订单号、发生时间、想要的结果。客户坚持投诉的，按投诉流程上报：一线客服 → 客服主管 → 售后经理。涉及人身安全或媒体曝光的，立即转售后经理。\n\n**Q：客户说要投诉到 12315，要不要拦？**\nA：不拦、不拖、不诱导撤诉。告知渠道，同时继续记录问题，2 小时内给答复。\n\n## 其他\n\n**Q：能不能试用？**\nA：提供 14 天全功能试用，不需要付款，到期自动停用，数据保留 30 天。\n\n**Q：支持哪些语言？**\nA：后台支持简体中文、繁体中文、英文。机器人回答支持中英双语，其他语种需要单独配置。\n\n**Q：能不能私有化部署？**\nA：可以，专业版以上支持。需要客户提供服务器，我们负责安装和培训，实施周期 5 到 10 个工作日。"}, {"id": "s06", "title": "开放接口与集成", "text": "# 开放接口与集成\n\n## 一、接入方式\n\n三种：\n\n- **网页挂件**：一行 script 引入，贴到网站 body 前即可。支持自定义按钮位置、主题色、欢迎语。\n- **开放接口**：REST，走 HTTPS，请求和返回都是 JSON。\n- **渠道接入**：微信公众号、小程序、抖音企业号、邮件。公众号和小程序扫码授权，抖音需要在开放平台建应用后回填 AppID。\n\n## 二、接口鉴权\n\n- 每个企业一个 `app_id` 和 `app_secret`，在管理后台「开放平台」里生成，secret 只显示一次。\n- 用 `app_id` + `app_secret` 换 `access_token`，有效期 7200 秒，过期重新换。\n- 请求头带 `Authorization: Bearer <access_token>`。\n- secret 泄露可以在后台一键重置，重置后旧 token 立即失效。\n\n## 三、接口清单\n\n| 接口 | 方法 | 说明 |\n|---|---|---|\n| /v1/token | POST | 换取 access_token |\n| /v1/messages | POST | 发送消息，支持文本、图片、文件 |\n| /v1/sessions | GET | 拉取会话列表，按更新时间倒序 |\n| /v1/sessions/{id}/messages | GET | 拉取某个会话的历史消息，分页 |\n| /v1/visitors | POST | 创建或更新访客信息，用于打通自有用户体系 |\n| /v1/kb/query | POST | 只查知识库，不生成回答，返回命中的原始段落 |\n\n## 四、频率与限制\n\n- 单企业默认 600 次/分钟，超出返回 429，响应头带 `Retry-After`。\n- 单次请求体上限 2MB。\n- 历史消息接口单页最多 100 条，用 `cursor` 翻页，不用 offset。\n- 文件消息先调上传接口拿 `file_id`，再发消息引用，不支持直接传二进制。\n\n## 五、Webhook 回调\n\n- 在后台配置回调地址，支持事件：`message.created`、`session.closed`、`ticket.created`。\n- 回调要求 3 秒内返回 200，否则重试，重试间隔 5 秒、30 秒、5 分钟、30 分钟，共 4 次。\n- 回调体带 `signature`，用 `app_secret` 做 HMAC-SHA256 验签。\n- 回调可能重复投递，接收方要按 `event_id` 做幂等。\n\n## 六、单点登录\n\n- 支持 SAML 2.0 和 OAuth 2.0，标准版及以上可用。\n- 开启后坐席从企业自己的门户进来，不用另建账号。\n- 支持按部门同步组织和人员，同步周期最快 10 分钟一次。\n\n## 七、常见集成场景\n\n- **自有 App 内嵌**：用开放接口发消息，用 WebView 加载会话页，登录态通过 URL 参数透传一次性 token。\n- **订单页带上下文**：创建会话时传 `visitor` 字段带上订单号，坐席侧直接看到这单信息。\n- **知识库对外**：用 `/v1/kb/query` 只取检索结果，接进企业自己的大模型应用。"}, {"id": "s07", "title": "数据与安全", "text": "# 数据、安全与备份\n\n## 一、数据存放\n\n- SaaS 版数据存放在阿里云华东 1（杭州）可用区 B，主备跨可用区。\n- 私有化版部署在客户自己的机房或云账号，数据不出客户环境。\n- 支持指定地域：目前可选杭州、北京、深圳。\n\n## 二、加密\n\n- 传输：全站 HTTPS，TLS 1.2 及以上，不支持降级。\n- 存储：会话内容和客户资料落盘加密（AES-256），密钥托管在 KMS，每 90 天轮换一次。\n- 密码：不可逆哈希（bcrypt），平台侧任何人都看不到明文。\n- 开放平台的 `app_secret` 只存哈希，生成后仅显示一次。\n\n## 三、备份与恢复\n\n| 项 | 策略 |\n|---|---|\n| 数据库全量 | 每天 02:00 一次，保留 30 天 |\n| 增量日志 | 每 5 分钟一次，保留 7 天 |\n| 附件 | 对象存储三副本，跨可用区 |\n| 恢复演练 | 每季度一次，记录在运维值班表 |\n\n恢复到任意时间点（PITR）的范围是最近 7 天，RTO 2 小时，RPO 5 分钟。\n\n## 四、日志与审计\n\n- 坐席操作日志（登录、导出、删除、改权限）默认保留 180 天。\n- 会话内容在会话结束后保留 3 年，可申请延长，最长 5 年。\n- 企业管理员可导出审计日志为 CSV，导出动作本身也记一条日志。\n\n## 五、数据导出与删除\n\n- 会话和客户资料：管理员在会话列表右上角导出 Excel，单次上限 5 万行，超过分批。\n- 审计日志：导出 CSV，异步打包，完成后邮件发下载链接。\n- 下载链接 24 小时有效，过期需重新生成。\n- 注销企业账号后，数据进入 30 天冷静期，期间可恢复；期满彻底删除，不可找回。\n\n## 六、合规\n\n- 已通过等保二级测评，三级在评估中。\n- 支持《个人信息保护法》要求的告知同意、单独同意、撤回同意。\n- 访客可在挂件里点「隐私政策」查看全文，也可申请删除自己的会话记录。\n- 提供数据处理协议（DPA），采购流程里可以索取。\n\n## 七、权限\n\n- 角色：超级管理员、管理员、组长、坐席、只读。\n- 数据权限按部门隔离，组长只能看本组会话。\n- 导出权限单独授权，默认只给管理员。\n- 敏感操作（删除会话、改权限、重置 secret）需要二次确认并记录操作人 IP。"}, {"id": "s08", "title": "上线与迁移", "text": "# 上线实施与数据迁移\n\n## 一、实施周期\n\n| 版本 | 典型周期 | 说明 |\n|---|---|---|\n| 基础版 | 3 到 5 个工作日 | 标准流程，远程协助 |\n| 标准版 | 2 到 3 周 | 含渠道接入、坐席培训 |\n| 专业版 | 4 到 6 周 | 含私有化部署、接口联调、历史数据迁移 |\n\n周期从合同生效起算，客户侧配合不到位的时间不计入。\n\n## 二、实施阶段\n\n1. **启动会**：确认范围、对接人、时间表、验收标准。\n2. **基础配置**：组织架构、坐席账号、角色权限、工作时间与路由规则。\n3. **渠道接入**：网站挂件、公众号、小程序，逐个联调。\n4. **知识库搭建**：导入产品资料，配置问答，跑一轮召回测试。\n5. **数据迁移**：历史客户、历史会话（可选）。\n6. **培训**：管理员 2 小时，坐席 1 小时，发操作手册和录屏。\n7. **试运行**：1 到 2 周，只看数据不改流程。\n8. **验收上线**：对照启动会的标准逐条确认。\n\n## 三、数据导入\n\n- **客户资料**：支持 Excel（.xlsx）和 CSV。模板在后台「客户管理 - 导入」下载。\n- 必填列：客户名称、手机号或邮箱（二选一）。其余列名可自定义，导入时做字段映射。\n- 单次导入上限 5 万行，超过分批次。\n- 导入前先跑校验，输出问题清单：编码、手机号格式、重复行、必填为空。校验不通过不写入。\n- 导入失败可整批回滚，不会留下半批数据。\n\n## 四、历史会话迁移\n\n- 只迁标准版及以上，专业版可迁附件。\n- 支持格式：CSV、JSON，也支持从其他客服系统导出后做字段映射。\n- 迁入的会话标记为「历史会话」，不参与当前统计和 SLA。\n- 迁移量超过 100 万条走离线任务，晚上执行，次日给报告。\n\n## 五、上线切换\n\n- 建议先灰度：按 10% 流量切新系统跑 3 天，比对响应时长和转人工率。\n- 老系统保留只读 30 天，方便回查。\n- 回滚方案：DNS 或挂件脚本切回老地址，10 分钟内生效，数据不丢（新系统的数据保留）。\n\n## 六、验收标准\n\n- 渠道全部接通，各渠道发一条消息能在工作台收到。\n- 知识库召回测试通过率不低于 80%（按双方确认的 30 条测试集）。\n- 坐席账号、角色、路由规则与需求文档一致。\n- 培训完成，管理员能独立改配置、导数据、看报表。\n\n## 七、常见延期原因\n\n- 客户侧域名备案未完成，挂件无法上线。\n- 公众号授权管理员不在场，扫码环节卡住。\n- 历史数据字段缺失严重，清洗时间超预期。\n- 客户内部对路由规则未达成一致，反复改配置。"}];
+
+/* ============ 模型接口配置 ============ */
+const CHAT_PRESETS = {
+  siliconflow:{base:'https://api.siliconflow.cn/v1', model:'zai-org/GLM-5.3-Flash'},
+  sensenova:{base:'https://token.sensenova.cn/v1', model:'sensenova-6.8-flash-lite'},
+  deepseek: {base:'https://api.deepseek.com/v1', model:'deepseek-chat'},
+  dashscope:{base:'https://dashscope.aliyuncs.com/compatible-mode/v1', model:'qwen-plus'},
+  zhipu:    {base:'https://open.bigmodel.cn/api/paas/v4', model:'glm-4-flash'},
+  openai:   {base:'https://api.openai.com/v1', model:'gpt-4o-mini'},
+  ollama:   {base:'http://localhost:11434/v1', model:'qwen2.5:7b'},
+  custom:   {base:'', model:''}
+};
+const EMB_PRESETS = {
+  siliconflow:{base:'https://api.siliconflow.cn/v1', model:'BAAI/bge-m3'},
+  dashscope:{base:'https://dashscope.aliyuncs.com/compatible-mode/v1', model:'text-embedding-v4'},
+  zhipu:    {base:'https://open.bigmodel.cn/api/paas/v4', model:'embedding-3'},
+  openai:   {base:'https://api.openai.com/v1', model:'text-embedding-3-small'},
+  ollama:   {base:'http://localhost:11434/v1', model:'bge-m3'},
+  custom:   {base:'', model:''}
+};
+
+/* ============ 演示环境预置 ============ */
+const DEMO_MODE = false;
+
+const DEMO_CHAT = {
+  preset:'sensenova',
+  base:'https://token.sensenova.cn/v1',
+  model:'sensenova-6.8-flash-lite',
+  key:''
+};
+const DEMO_CHAT_FALLBACK = {
+  preset:'siliconflow',
+  base:'https://api.siliconflow.cn/v1',
+  model:'zai-org/GLM-5.3-Flash',
+  key:''
+};
+const DEMO_EMB = {
+  preset:'siliconflow',
+  base:'https://api.siliconflow.cn/v1',
+  model:'BAAI/bge-m3',
+  key:''
+};
+
+let API = Object.assign({}, DEMO_CHAT);
+let EMB = Object.assign({}, DEMO_EMB);
+let VEC = {ready:false, dim:0, model:''};
+
+function loadApi(){
+  if(DEMO_MODE){
+    API = Object.assign({}, DEMO_CHAT);
+    EMB = Object.assign({}, DEMO_EMB);
+  } else {
+  try{
+    const a = JSON.parse(localStorage.getItem('rag_api') || 'null');
+    if(a) API = Object.assign({}, API, a);
+    const e = JSON.parse(localStorage.getItem('rag_emb') || 'null');
+    if(e) EMB = Object.assign({}, EMB, {base:e.base||EMB.base, model:e.model||'', key:e.key||''});
+  }catch(err){}
+  }
+  fillApiDom();
+}
+
+function fillApiDom(){
+  document.getElementById('p-chat').value = API.preset || 'custom';
+  document.getElementById('base-chat').value = API.base || '';
+  document.getElementById('key-chat').value = API.key || '';
+  document.getElementById('model-chat').value = API.model || '';
+  document.getElementById('p-emb').value = EMB.preset || 'custom';
+  document.getElementById('base-emb').value = EMB.base || '';
+  document.getElementById('key-emb').value = EMB.key || '';
+  document.getElementById('model-emb').value = EMB.model || '';
+  renderStats();
+}
+
+function pickPreset(which){
+  const id = which === 'emb' ? 'p-emb' : 'p-chat';
+  const k = document.getElementById(id).value;
+  const P = which === 'emb' ? EMB_PRESETS : CHAT_PRESETS;
+  const v = P[k];
+  if(!v || k === 'custom') return;
+  document.getElementById(which === 'emb' ? 'base-emb' : 'base-chat').value = v.base;
+  document.getElementById(which === 'emb' ? 'model-emb' : 'model-chat').value = v.model;
+  if(k === 'ollama') document.getElementById(which === 'emb' ? 'key-emb' : 'key-chat').value = '';
+}
+
+function copyChatToEmb(){
+  document.getElementById('p-emb').value = document.getElementById('p-chat').value === 'sensenova' ? 'custom' : document.getElementById('p-chat').value;
+  document.getElementById('base-emb').value = document.getElementById('base-chat').value;
+  document.getElementById('key-emb').value = document.getElementById('key-chat').value;
+}
+
+function saveApi(){
+  API = {
+    preset: document.getElementById('p-chat').value,
+    base: document.getElementById('base-chat').value.trim().replace(/\/+$/, ''),
+    model: document.getElementById('model-chat').value.trim(),
+    key: document.getElementById('key-chat').value.trim()
+  };
+  EMB = {
+    preset: document.getElementById('p-emb').value,
+    base: document.getElementById('base-emb').value.trim().replace(/\/+$/, ''),
+    model: document.getElementById('model-emb').value.trim(),
+    key: document.getElementById('key-emb').value.trim()
+  };
+  if(!DEMO_MODE){
+    localStorage.setItem('rag_api', JSON.stringify(API));
+    localStorage.setItem('rag_emb', JSON.stringify(EMB));
+  }
+  hideApi();
+  VEC = {ready:false, dim:0, model:''};
+  renderStats();
+  if(embReady()) buildVectors();
+  else toast('已保存。对话：' + (API.model || '未填') + '　向量：未配');
+}
+
+function showApi(){ document.getElementById('api').classList.add('on'); }
+function hideApi(){ document.getElementById('api').classList.remove('on'); }
+
+function baseUrl(){
+  let b = (API.base || '').trim().replace(/\/+$/, '');
+  return b.replace(/\/(chat\/completions|embeddings|models)$/, '');
+}
+function embBase(){
+  let b = (EMB.base || '').trim().replace(/\/+$/, '');
+  return b.replace(/\/(chat\/completions|embeddings|models)$/, '');
+}
+function chatUrl(){ const b = baseUrl(); return b ? b + '/chat/completions' : ''; }
+function embUrl(){ const b = embBase(); return b ? b + '/embeddings' : ''; }
+
+function isLocal(u){ return /localhost|127\.0\.0\.1/.test(u || ''); }
+function apiReady(){ return !!chatUrl() && !!API.model && (isLocal(chatUrl()) || !!API.key); }
+function embReady(){ return !!embUrl() && !!EMB.model && (isLocal(embUrl()) || !!(EMB.key || API.key)); }
+
+/* ---------- 一键获取模型列表 ---------- */
+async function fetchModels(which){
+  const isEmb = which === 'emb';
+  const base = (document.getElementById(isEmb ? 'base-emb' : 'base-chat').value || '')
+    .trim().replace(/\/+$/, '').replace(/\/(chat\/completions|embeddings|models)$/, '');
+  const key = (document.getElementById(isEmb ? 'key-emb' : 'key-chat').value || '').trim();
+  if(!base){ toast('先填 Base URL'); return; }
+  const btn = event && event.target ? event.target : null;
+  if(btn){ btn.disabled = true; btn.textContent = '获取中…'; }
+  try{
+    const headers = {};
+    if(key) headers['Authorization'] = 'Bearer ' + key;
+    const r = await fetch(base + '/models', { headers });
+    const raw = await r.text();
+    let d = null; try{ d = JSON.parse(raw); }catch(e){}
+    if(!r.ok) throw new Error('HTTP ' + r.status + ' ' + raw.slice(0,100));
+    let list = (d?.data || d?.models || []).map(x => x.id || x.name || x).filter(Boolean);
+    if(!list.length) throw new Error('返回里没有模型列表');
+    renderChips(which, list);
+  }catch(e){
+    renderChips(which, [], e.message);
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = '一键获取'; }
+  }
+}
+
+function renderChips(which, list, err){
+  const box = document.getElementById(which === 'emb' ? 'chips-emb' : 'chips-chat');
+  if(err){
+    box.innerHTML = `<span class="none">获取失败：${err}（可手填模型名）</span>`;
+    return;
+  }
+  const embRe = /embed|bge|m3e|gte/i;
+  const rerankRe = /rerank/i;
+  let arr = list.filter(x => !rerankRe.test(x));
+  if(which === 'emb'){
+    const hit = arr.filter(x => embRe.test(x));
+    arr = hit.length ? hit : arr;
+  } else {
+    const noEmb = arr.filter(x => !embRe.test(x));
+    arr = noEmb.length ? noEmb : arr;
+  }
+  if(!arr.length){ box.innerHTML = '<span class="none">没有可用的模型</span>'; return; }
+  box.innerHTML = arr.slice(0, 20).map(x =>
+    `<span class="${which==='emb'?'emb':''}" title="${x}" onclick="pickModel('${which}','${x.replace(/'/g,'')}')">${x}</span>`
+  ).join('');
+}
+function pickModel(which, name){
+  document.getElementById(which === 'emb' ? 'model-emb' : 'model-chat').value = name;
+}
+
+/* ---------- 向量化 ---------- */
+function cosine(a, b){
+  if(!a || !b || a.length !== b.length) return 0;
+  let dot = 0, na = 0, nb = 0;
+  for(let i=0;i<a.length;i++){ dot += a[i]*b[i]; na += a[i]*a[i]; nb += b[i]*b[i]; }
+  return dot / (Math.sqrt(na) * Math.sqrt(nb) || 1);
+}
+
+async function embedOnce(texts){
+  const headers = {'Content-Type':'application/json'};
+  const k = EMB.key || API.key;
+  if(k) headers['Authorization'] = 'Bearer ' + k;
+  const r = await fetch(embUrl(), {
+    method:'POST', headers,
+    body: JSON.stringify({ model: EMB.model, input: texts })
+  });
+  const raw = await r.text();
+  let d = null; try{ d = JSON.parse(raw); }catch(e){}
+  if(!r.ok) throw new Error('HTTP ' + r.status + ' ' + raw.slice(0, 160));
+  const rows = d?.data;
+  if(!Array.isArray(rows) || !rows.length) throw new Error('返回里没有向量');
+  return rows.sort((x,y)=>(x.index||0)-(y.index||0)).map(x => x.embedding);
+}
+
+async function embedBatch(texts, onProgress){
+  const BATCH = 16;   // 硅基 bge-m3 单次上限 32，留余量
+  const out = [];
+  for(let i=0;i<texts.length;i+=BATCH){
+    const part = texts.slice(i, i+BATCH);
+    const vecs = await embedOnce(part);
+    out.push(...vecs);
+    if(onProgress) onProgress(out.length, texts.length);
+  }
+  return out;
+}
+
+function vecSig(){
+  return DOCS.map(d => d.id + ':' + d.text.length).join('|') + '#' + chunks.length + '#' + (EMB.model || '');
+}
+
+function saveVecCache(){
+  if(!VEC.ready) return;
+  try{
+    const vecs = chunks.map(c => c.vec.map(v => Math.round(v * 10000) / 10000));
+    localStorage.setItem('rag_vec', JSON.stringify({sig:vecSig(), dim:VEC.dim, model:VEC.model, vecs}));
+  }catch(e){
+    localStorage.removeItem('rag_vec');
+    toast('向量缓存没写进去，刷新后需要重新计算');
+  }
+}
+
+function loadVecCache(){
+  try{
+    const d = JSON.parse(localStorage.getItem('rag_vec') || 'null');
+    if(!d || d.sig !== vecSig() || !Array.isArray(d.vecs) || d.vecs.length !== chunks.length) return false;
+    chunks.forEach((c,i) => { c.vec = d.vecs[i]; });
+    VEC = {ready:true, dim:d.dim, model:d.model};
+    renderStats();
+    return true;
+  }catch(e){ return false; }
+}
+
+async function buildVectors(){
+  if(!embReady()) return false;
+  VEC = {ready:false, dim:0, model:EMB.model, busy:true};
+  renderStats();
+  try{
+    const vecs = await embedBatch(chunks.map(c => c.text), (done, total)=>{
+      const el = document.getElementById('s-vec');
+      if(el) el.textContent = done + '/' + total;
+    });
+    chunks.forEach((c,i) => { c.vec = vecs[i]; });
+    VEC = {ready:true, dim:vecs[0].length, model:EMB.model};
+    renderStats();
+    saveVecCache();
+    toast(`向量索引已建立：${chunks.length} 块 × ${vecs[0].length} 维（${EMB.model}）`);
+    return true;
+  }catch(e){
+    VEC = {ready:false, dim:0, model:'', err:e.message};
+    renderStats();
+    toast('向量化失败：' + e.message.slice(0, 70));
+    return false;
+  }
+}
+
+async function rebuildVectors(){
+  VEC = {ready:false, dim:0, model:''};
+  chunks.forEach(c => { c.vec = null; });
+  renderStats();
+  if(!embReady()){ toast('先在「接口设置 · 向量模型」里填 Base URL、Key 和模型名'); return; }
+  await buildVectors();
+}
+
+/* ============ 切块 ============ */
+const CHUNK_SIZE = 220;   // 每块目标字数
+const OVERLAP = 40;       // 相邻块重叠字数
+
+let chunks = [];
+let vocab = [];
+let idf = {};
+
+function splitChunks(){
+  chunks = [];
+  DOCS.forEach(d=>{
+    // 第一步：按 markdown 标题切成小节；没有标题就整篇当一节
+    const secs = d.text.split(/\n(?=#{1,3}\s)/).map(x=>x.trim()).filter(Boolean);
+    let idx = 0;
+    secs.forEach(sec=>{
+      const m = sec.match(/^#{1,3}\s*(.+)/);
+      const title = m ? m[1].trim() : '';
+      let body = m ? sec.replace(/^#{1,3}\s*.+\n?/, '') : sec;
+      if(!body.trim()) body = sec;
+
+      // 第二步：节内按句切，累加到目标长度
+      const sents = body.split(/(?<=[。！？\n])\s*/).filter(x=>x.trim());
+      let buf = '';
+      const push = ()=>{
+        if(!buf.trim()) return;
+        chunks.push({doc:d, idx:idx++, section:title, text:buf.trim()});
+      };
+      sents.forEach(x=>{
+        if((buf + x).length > CHUNK_SIZE && buf){
+          push();
+          buf = buf.slice(-OVERLAP) + x;
+        } else {
+          buf += x;
+        }
+      });
+      push();
+    });
+  });
+}
+
+/* ============ 分词（中文 bigram + 英文词） ============ */
+function tokenize(text){
+  const t = text.toLowerCase().replace(/[^\u4e00-\u9fa5a-z0-9]/g,' ');
+  const out = [];
+  // 英文/数字
+  (t.match(/[a-z0-9]{2,}/g)||[]).forEach(w=>out.push(w));
+  // 中文 bigram
+  const cn = t.replace(/[^\u4e00-\u9fa5]/g,'');
+  for(let i=0;i<cn.length-1;i++) out.push(cn.slice(i,i+2));
+  return out;
+}
+
+function buildIndex(){
+  vocab = []; idf = {};
+  const df = {};
+  chunks.forEach(c=>{
+    c.tf = {};
+    const tk = tokenize(c.text);
+    tk.forEach(w=>{ c.tf[w] = (c.tf[w]||0)+1; });
+    Object.keys(c.tf).forEach(w=>{ df[w] = (df[w]||0)+1; });
+    c.len = tk.length;
+  });
+  vocab = Object.keys(df);
+  const N = chunks.length;
+  vocab.forEach(w=>{ idf[w] = Math.log((N+1)/(df[w]+0.5)); });
+  // 预计算向量模
+  chunks.forEach(c=>{
+    let s = 0;
+    Object.keys(c.tf).forEach(w=>{
+      const v = (1+Math.log(c.tf[w])) * idf[w];
+      s += v*v;
+    });
+    c.norm = Math.sqrt(s) || 1;
+  });
+}
+
+async function rank(query){
+  if(VEC.ready && embReady()){
+    try{
+      const [qv] = await embedBatch([query]);
+      const ranked = chunks.map(c => ({
+        chunk:c,
+        sim: cosine(qv, c.vec),
+        words: [],
+        byVec: true
+      })).sort((a,b) => b.sim - a.sim);
+      return ranked;
+    }catch(e){
+      toast('向量检索失败，退回 TF-IDF：' + e.message.slice(0, 40));
+    }
+  }
+  return score(query);
+}
+
+function score(query){
+  const qtf = {};
+  tokenize(query).forEach(w=>{ qtf[w] = (qtf[w]||0)+1; });
+  const qv = {};
+  let qn = 0;
+  Object.keys(qtf).forEach(w=>{
+    if(!idf[w]) return;
+    const v = (1+Math.log(qtf[w])) * idf[w];
+    qv[w] = v; qn += v*v;
+  });
+  qn = Math.sqrt(qn) || 1;
+
+  return chunks.map(c=>{
+    let dot = 0;
+    Object.keys(qv).forEach(w=>{
+      if(c.tf[w]) dot += qv[w] * (1+Math.log(c.tf[w])) * idf[w];
+    });
+    return {chunk:c, sim: dot/(qn*c.norm), words:Object.keys(qv)};
+  }).sort((a,b)=>b.sim-a.sim);
+}
+
+/* ============ 渲染 ============ */
+function renderDocs(){
+  document.getElementById('doclist').innerHTML = DOCS.map(d=>{
+    const n = chunks.filter(c=>c.doc.id===d.id).length;
+    const secN = new Set(chunks.filter(c=>c.doc.id===d.id).map(c=>c.section)).size;
+    return `<div class="doc" onclick="toast('「${d.title}」${secN} 个小节，切成 ${n} 块')">
+      <div class="t">${d.title}</div>
+      <div class="n">${d.text.length} 字 · ${secN} 节 · ${n} 块</div></div>`;
+  }).join('');
+  document.getElementById('s-doc').textContent = DOCS.length;
+  document.getElementById('s-chunk').textContent = chunks.length;
+  renderStats();
+}
+
+function renderStats(){
+  const el = document.getElementById('s-vec');
+  const btn = document.getElementById('btn-vec');
+  if(!el) return;
+  if(VEC.busy){ el.textContent = '建立中…'; }
+  else if(VEC.ready){ el.textContent = VEC.dim + ' 维'; }
+  else { el.textContent = '未建'; }
+  if(btn){
+    btn.textContent = VEC.ready ? '重建向量索引' : '建立向量索引';
+    btn.disabled = !embReady();
+    btn.style.opacity = embReady() ? 1 : .5;
+    btn.title = embReady() ? '' : '先在「接口设置」里填向量模型';
+  }
+}
+
+const SAMPLES = ['客户要退货怎么办','退款多久到账','能开专票吗','账号能不能共用'];
+
+function renderSamples(){
+  document.getElementById('samples').innerHTML = SAMPLES.map(s=>
+    `<span onclick="document.getElementById('q').value='${s}';run()">${s}</span>`).join('');
+}
+
+function hi(text, words){
+  if(!words || !words.length) return text;
+  let out = text;
+  words.filter(w=>w.length>=2).slice(0,12).forEach(w=>{
+    out = out.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g'), m=>`<mark>${m}</mark>`);
+  });
+  return out;
+}
+
+function renderSteps(stage){
+  const S = [
+    ['切块','按段落和字数切，相邻块留重叠，避免一句话被切断'],
+    ['向量化','调 embedding 接口把每块转成向量；没配接口时退回 TF-IDF 词频向量'],
+    ['检索','把问题也变成向量，和每个块算余弦相似度，取 Top 3'],
+    ['拼装','命中的块塞进 prompt，让模型基于这些资料回答'],
+    ['生成','模型只根据资料答，资料里没有就明说不知道']
+  ];
+  document.getElementById('steps').innerHTML = S.map((x,i)=>
+    `<div class="step ${i<=stage?'on':''}"><div class="i">${i+1}</div>
+     <div class="b"><b>${x[0]}</b><span>${x[1]}</span></div></div>`).join('');
+}
+
+function toast(m){
+  const el = document.getElementById('toast');
+  el.textContent = m; el.classList.add('on');
+  clearTimeout(el._t); el._t = setTimeout(()=>el.classList.remove('on'), 2200);
+}
+
+
+/* ============ 视角切换 ============ */
+let VIEW = localStorage.getItem('rag_view') || 'admin';
+
+function setView(v){
+  VIEW = v;
+  localStorage.setItem('rag_view', v);
+  document.body.dataset.view = v;
+  document.querySelectorAll('#views button, #vswitch button').forEach(b=>{
+    b.classList.toggle('on', b.dataset.v === v);
+  });
+  const tip = document.getElementById('demo-tip');
+  if(tip && v !== 'admin') tip.style.display = 'none';
+  const T = {
+    client:['智云客服','在线咨询'],
+    agent:['智云客服 · 坐席工作台','会话 · 客户资料 · 常用语'],
+    admin:['知识库问答演示','RAG 全流程 · 切块 / 向量化 / 检索 / 拼装 / 生成']
+  }[v];
+  if(T){
+    document.getElementById('hd-title').textContent = T[0];
+    document.getElementById('hd-sub').textContent = T[1];
+    document.getElementById('hd-chip').style.display = v === 'admin' ? '' : 'none';
+  }
+  const PEER = {
+    client:['云','小云','在线 · 通常 1 分钟内回复'],
+    agent:['王','王女士','官网在线咨询 · 第 3 次来访'],
+    admin:['云','小云','会话调试']
+  }[v];
+  if(PEER){
+    document.getElementById('peer-av').textContent = PEER[0];
+    document.getElementById('peer-name').textContent = PEER[1];
+    document.getElementById('peer-sub').textContent = PEER[2];
+  }
+  const ph = {
+    client:'请输入问题',
+    agent:'以坐席身份回复',
+    admin:'输入测试问题'
+  };
+  const inp = document.getElementById('q');
+  if(inp) inp.placeholder = ph[v] || ph.admin;
+  const btn = document.getElementById('btn');
+  if(btn) btn.textContent = v === 'agent' ? '发送' : '发送';
+  updateSide();
+  scrollThread();
+}
+
+const SESSION = {turns:0, graded:0, hits:0, mood:'—', host:'小云 · AI'};
+
+function resetSession(){
+  SESSION.turns = 0; SESSION.graded = 0; SESSION.hits = 0; SESSION.mood = '—'; SESSION.host = '小云 · AI';
+}
+
+
+
+function updateSide(){
+  const c = chat();
+  const host = document.getElementById('side-host');
+  if(host) host.textContent = c.host || '小云 · 自动';
+
+  const urgent = (c.mood === '不满' || c.mood === '生气') && (c.host || '').indexOf('人工') !== 0;
+  const hb = document.getElementById('btn-handoff');
+  if(hb){
+    hb.classList.toggle('urgent', urgent);
+    hb.textContent = urgent ? '转人工 · 建议优先' : '转人工';
+  }
+}
+
+function handoff(){
+  const c = chat();
+  c.host = '人工 · 待接';
+  c.msgs.push({sys:'已发起转人工，等待坐席接入'});
+  renderThread();
+  updateSide();
+  toast('已发起转人工');
+}
+
+function endChat(){
+  toast('会话已结束');
+  resetThread();
+}
+
+function fillReply(text){
+  const inp = document.getElementById('q');
+  inp.value = text;
+  inp.focus();
+}
+
+function agentAct(text){
+  addBot(mdToHtml(text));
+  HISTORY.push({q:'（坐席手动回复）', a:text});
+  if(HISTORY.length > MAX_TURNS) HISTORY.shift();
+  renderHist(); updateSide();
+}
+
+/* ============ 会话历史 ============ */
+let HISTORY = [];
+const MAX_TURNS = 3;
+
+/* 当前会话里看得见的问答，预设的消息也算 */
+function sessionTurns(){
+  const out = [];
+  let q = '';
+  chat().msgs.forEach(m => {
+    if(m.sys) return;
+    if(m.role === 'me'){ q = String(m.text || '').trim(); return; }
+    if(m.role === 'bot' && q){
+      const a = String(m.html || '').replace(/<[^>]+>/g, '').trim();
+      if(a){ out.push({q: q, a: a.slice(0, 300)}); q = ''; }
+    }
+  });
+  return out.slice(-MAX_TURNS);
+}
+
+function historyText(){
+  if(!HISTORY.length) return '';
+  return HISTORY.slice(-MAX_TURNS).map(h => '用户：' + h.q + '\n客服：' + h.a).join('\n');
+}
+
+function renderHist(){
+  const el = document.getElementById('hist-info');
+  if(!el) return;
+  if(!HISTORY.length){ el.innerHTML = ''; return; }
+  el.innerHTML = '已记 ' + HISTORY.length + ' 轮 <button onclick="clearHist()">清空</button>';
+}
+
+function clearHist(){
+  resetThread();
+  toast('已开新会话');
+}
+
+/* ============ 意图路由 ============ */
+const INTENT = {
+  greet:  /^(你好|您好|hi|hello|嗨|哈喽|在吗|在不在|有人吗|早上好|中午好|下午好|晚上好)[\s!！。.~，,]*$/i,
+  thanks: /^(谢谢|感谢|多谢|thanks|thank you|thx)[\s!！。.~，,]*$/i,
+  bye:    /^(再见|拜拜|bye|结束|没事了|不用了|好的谢谢)[\s!！。.~，,]*$/i,
+  human:  /(转人工|人工客服|找人工|真人客服|人工服务|转客服)/,
+  identity: /(你是谁|你叫什么|你是什么|你是机器人|你是真人|你是人工|你是ai|你是AI|你哪位)/
+};
+
+const REPLY = {
+  greet: '您好，我是智能客服。可以问我产品功能、售后政策、部署运维、账号权限这几类问题，也可以直接点下面的常见问题。',
+  thanks: '不客气。还有其他问题随时问。',
+  bye: '好的，祝您顺利。有需要再找我。',
+  human: '好的，正在为您转接人工客服。工作时间 9:00 至 18:00，非工作时间请留言，次日回复。',
+  identity: '我是智云客服的智能助手，负责产品功能、售后政策、部署运维和账号权限这几类问题。人工客服工作日 9:00 至 18:00 在线。'
+};
+
+function detectIntent(q){
+  for(const k of ['greet','thanks','bye','human','identity']){
+    if(INTENT[k].test(q.trim())) return k;
+  }
+  return 'rag';
+}
+
+/* ============ 证据判断（CRAG 思路） ============ */
+async function gradeEvidence(q, cands){
+  if(!apiReady() || !cands.length) return {ok:false, use:[], missing:'', skip:true};
+  const list = cands.map((x,i)=>`[${i+1}] ${x.chunk.doc.title} · ${x.chunk.section || ''}\n${x.chunk.text}`).join('\n\n');
+  const p = '问题：' + q + '\n\n候选资料：\n' + list + '\n\n'
+    + '判断这些资料能否回答问题，同时判断用户情绪。只输出 JSON，不要解释：\n'
+    + '{"sufficient": true 或 false, "use": [能回答问题的资料编号], "missing": "还缺什么信息，不缺就填空字符串", "sentiment": "平静" 或 "着急" 或 "不满" 或 "生气"}\n'
+    + '注意：主题相近但答不了这个问题的，不算能用。情绪按用户这句话的措辞判断，拿不准就写"平静"。';
+  try{
+    const r = await callChat(p, {temperature:0, max_tokens:600});
+    const m = r.match(/\{[\s\S]*\}/);
+    if(!m) return {ok:false, use:[], missing:'', skip:true};
+    const j = JSON.parse(m[0]);
+    const use = (Array.isArray(j.use) ? j.use : [])
+      .map(n => parseInt(n, 10) - 1)
+      .filter(i => i >= 0 && i < cands.length);
+    const SENT = ['平静','着急','不满','生气'];
+    const senti = SENT.indexOf(j.sentiment) >= 0 ? j.sentiment : '平静';
+    return {ok: !!j.sufficient, use, missing: (j.missing || '').slice(0, 60), skip:false, sentiment: senti};
+  }catch(e){
+    return {ok:false, use:[], missing:'', skip:true, err:e.message};
+  }
+}
+
+/* ============ 极简 markdown ============ */
+function mdToHtml(t){
+  let h = String(t)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  h = h.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  h = h.replace(/^###\s+(.+)$/gm, '<div class="md-h">$1</div>');
+  h = h.replace(/^##\s+(.+)$/gm, '<div class="md-h">$1</div>');
+  h = h.replace(/(?:^[-*]\s+.*(?:\n|$))+/gm, m => {
+    const items = m.trim().split('\n')
+      .map(l => '<li>' + l.replace(/^[-*]\s+/, '') + '</li>').join('');
+    return '<ul class="md-ul">' + items + '</ul>';
+  });
+  h = h.replace(/<\/ul>\n/g, '</ul>');
+  h = h.replace(/\n{2,}/g, '<div class="md-gap"></div>');
+  h = h.replace(/\n/g, '<br>');
+  return h;
+}
+
+/* ============ 查询改写 ============ */
+let RW = {on: false};
+
+function toggleRW(){
+  RW.on = document.getElementById('rw-on').checked;
+  localStorage.setItem('rag_rw', RW.on ? '1' : '0');
+}
+
+async function callChat(prompt, opt){
+  opt = opt || {};
+  if(!apiReady()) throw new Error('未配置对话模型');
+  const headers = {'Content-Type':'application/json'};
+  if(API.key) headers['Authorization'] = 'Bearer ' + API.key;
+  const msgs = Array.isArray(prompt) ? prompt : [{role:'user', content: prompt}];
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), opt.timeout || 60000);
+  try{
+    const r = await fetch(chatUrl(), {
+      method:'POST', headers, signal: ctrl.signal,
+      body: JSON.stringify({
+        model: API.model,
+        messages: msgs,
+        temperature: opt.temperature != null ? opt.temperature : 0,
+        max_tokens: opt.max_tokens || 800
+      })
+    });
+    const raw = await r.text();
+    let d = null; try{ d = JSON.parse(raw); }catch(e){}
+    if(!r.ok) throw new Error('HTTP ' + r.status + ' ' + raw.slice(0, 120));
+    const msg = d?.choices?.[0]?.message || {};
+    const txt = String(msg.content || '').replace(/<\/?think>/g, '').trim();
+    if(!txt) throw new Error('模型没有返回正文');
+    return txt;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* 主模型挂了就换备用的，演示时别卡在 502 上 */
+async function askAgent(msgs, opt){
+  try{
+    return await callChat(msgs, opt);
+  }catch(e){
+    const canFallback = (typeof DEMO_MODE !== 'undefined') && DEMO_MODE
+      && DEMO_CHAT_FALLBACK && DEMO_CHAT_FALLBACK.key
+      && API.model !== DEMO_CHAT_FALLBACK.model;
+    if(!canFallback) throw e;
+    const bak = Object.assign({}, API);
+    API = Object.assign({}, DEMO_CHAT_FALLBACK);
+    fillApiDom();
+    try{
+      const t = await callChat(msgs, opt);
+      toast('商汤没响应，已切到备用模型');
+      return t;
+    }catch(e2){
+      API = bak; fillApiDom();
+      throw e;
+    }
+  }
+}
+
+async function rewriteQuery(q){
+  if(!RW.on || !apiReady()) return '';
+  const hist = historyText();
+  const ctxLine = hist
+    ? '最近的对话：\n' + hist + '\n\n'
+    : '';
+  const prompt = ctxLine + '把用户的问题改写成一句完整、适合在知识库里检索的话。\n'
+    + (hist ? '如果这句话里有"这个""那个""它""那"这类指代，用上面的对话补全成具体对象。\n' : '')
+    + '规则：\n'
+    + '1. 用户只说"多久到""几天""多少钱""能不能"这类省略句时，用上面客服最后说的那件事补全成完整问题\n'
+    + '2. 只补全省略的主语宾语、只做同义替换，不增加原句没有的事实\n'
+    + '3. 不回答问题，不解释，不加引号\n'
+    + '4. 不超过 30 个字，只输出这一句\n\n'
+    + '示例：\n'
+    + '问：买完后悔了\n改写：商品购买后想退货怎么处理\n'
+    + '问：能开专票吗\n改写：增值税专用发票怎么开具\n'
+    + '问：东西坏了\n改写：商品质量问题怎么退换\n'
+    + '上面聊的是发票开具，问：多久到\n改写：发票多长时间能寄到\n\n'
+    + '问：' + q + '\n改写：';
+  try{
+    let r = await callChat(prompt, {temperature:0, max_tokens:600});
+    r = (r.split('\n').filter(x=>x.trim())[0] || '').trim();
+    r = r.replace(/^(改写|答|输出)[：:]\s*/, '').replace(/^["'「『]|["'」』]$/g, '').trim();
+    if(!r || r.length > 60) return '';
+    if(/抱歉|无法|不知道|作为|以下/.test(r)) return '';
+    if(r === q) return '';
+    return r;
+  }catch(e){
+    return '';
+  }
+}
+
+/* ============ 主流程 ============ */
+
+/* 人设：这段话决定它是客服还是搜索框 */
+const SYS = `你是「小云」，智云客服的在线客服。公司在卖一套在线客服与工单系统，含网页客服端、管理后台和开放接口。
+
+说话方式：
+- 像真人在聊天窗口打字。短句，一次两到四句，别写成文档
+- 称呼用「您」，语气平和，不用"亲""呢~"这类
+- 不列"首先其次总结"，不加粗，不写小标题，不写编号
+- 用户急或生气，直接给能用的信息，别描述自己正在做什么
+- 不复述用户的话，不说"根据资料显示""为您解答如下"
+
+怎么回答：
+- 功能、价格、售后、部署、账号权限，看这一轮给你的资料，照资料说。数字、时限、条件必须准确
+- 资料里没有的，直说这边查不到，不要猜。然后给一个下一步：换个问法、转人工、或者留联系方式让同事回
+- 绝不编价格、时限、条款、人名、单号
+- 不说"知识库""检索""相似度""阈值""资料中没有提到"这类内部说法，要说"这个我这边查不到"
+- 被问是不是机器人，承认，别装人
+- 用户接着上一轮追问，按上一轮的主题回答，别换成别的话题
+- 只答用户问的，不主动推销
+- 别编你看不到的东西：排队人数、等待时长、按钮在哪个位置、工单号、同事姓名
+- 用户要转人工，就说人工的工作时间，让他留个联系方式，别说"已为您排队第 3 位"这种`;
+
+function nowHM(){
+  const d = new Date();
+  return ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2);
+}
+
+function scrollThread(){
+  const t = document.getElementById('thread');
+  if(t) t.scrollTop = t.scrollHeight + 200;
+}
+
+const CHATS = [
+  {id:'c1', name:'王女士', initial:'王', source:'官网', visits:'第 3 次', company:'杭州云栖贸易',
+   tags:['续费期内','已开专票'], memo:'上次咨询过坐席扩容，说下个月再定。', time:'14:32', host:'小云 · 自动', msgs:[
+     {role:'me', text:'你们能开专票吗', t:'14:31'},
+     {role:'bot', html:'可以开。下单时备注，或者订单完成后 90 天内申请补开。专票需要提供完整的开票资料，审核通过后 3 个工作日内寄出。', t:'14:32'}
+   ]},
+  {id:'c2', name:'李先生', initial:'李', source:'公众号', visits:'第 1 次', company:'宁波甬信物流',
+   tags:['试用中'], memo:'试用第 5 天，问过部署。', time:'14:20', host:'小云 · 自动', msgs:[
+     {role:'me', text:'部署要几台服务器', t:'14:19'},
+     {role:'bot', html:'50 坐席以下单机就够了，8 核 16G，系统用 CentOS 7.9 或 Ubuntu 20.04。您这边大概多少人用？', t:'14:20'}
+   ]},
+  {id:'c3', name:'陈经理', initial:'陈', source:'官网', visits:'第 2 次', company:'绍兴柯桥纺织',
+   tags:[], memo:'', time:'13:58', host:'小云 · 自动', msgs:[
+     {role:'me', text:'先看看，有问题再问', t:'13:58'}
+   ]},
+  {id:'c4', name:'赵女士', initial:'赵', source:'官网', queue:true, wait:'已等 3 分钟', msgs:[]},
+  {id:'c5', name:'周先生', initial:'周', source:'官网', queue:true, wait:'已等 5 分钟', msgs:[]}
+];
+let CUR = 'c1';
+let WAITING = false;
+
+function chat(){ return CHATS.find(c => c.id === CUR) || CHATS[0]; }
+
+function esc(t){
+  return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderThread(){
+  const t = document.getElementById('thread');
+  const c = chat();
+  if(!c.msgs.length){
+    t.innerHTML = '<div class="sysline">还没有消息</div>';
+  } else {
+    t.innerHTML = c.msgs.map(m => {
+      if(m.sys) return '<div class="sysline">' + esc(m.sys) + '</div>';
+      const tm = '<div class="t">' + (m.t || '') + '</div>';
+      if(m.role === 'me'){
+        return '<div class="msg me"><div class="bub"><div class="say">' + esc(m.text) + '</div>' + tm + '</div><div class="av">' + c.initial + '</div></div>';
+      }
+      return '<div class="msg bot"><div class="av">云</div><div class="bub"><div class="say">' + (m.html || '') + '</div>' + tm + '</div></div>';
+    }).join('');
+  }
+  scrollThread();
+}
+
+function addUser(text){
+  chat().msgs.push({role:'me', text: text, t: nowHM()});
+  renderThread();
+}
+
+function addBot(html){
+  const c = chat();
+  c.msgs.push({role:'bot', html: html, t: nowHM()});
+  renderThread();
+  return c.msgs.length - 1;
+}
+
+function finishBot(i, html){
+  const c = chat();
+  if(c.msgs[i]) c.msgs[i].html = html;
+  renderThread();
+}
+
+function renderChatList(){
+  const act = CHATS.filter(c => !c.queue);
+  const q = CHATS.filter(c => c.queue);
+  document.getElementById('chatlist').innerHTML = act.map(c => {
+    const lm = c.msgs.length ? c.msgs[c.msgs.length-1] : null;
+    let last = '还没有消息';
+    if(lm){
+      if(lm.text) last = lm.text;
+      else if(lm.html) last = lm.html.replace(/<[^>]+>/g,'').trim() || '…';
+      else if(lm.sys) last = lm.sys;
+    }
+    return `<div class="litem${c.id === CUR ? ' on' : ''}" onclick="switchChat('${c.id}')">
+      <div class="lav">${c.initial}</div>
+      <div class="lb"><div class="ln">${c.name} <i>${c.source}</i></div><div class="lp">${esc(last)}</div></div>
+      <div class="lm"><span>${c.time || ''}</span></div>
+    </div>`;
+  }).join('');
+  document.getElementById('queuelist').innerHTML = q.length
+    ? q.map(c => `<div class="qi" onclick="takeChat('${c.id}')">${c.name} · ${c.wait}</div>`).join('')
+    : '<div class="qi">没有排队</div>';
+  document.getElementById('n-active').textContent = act.length;
+  document.getElementById('n-queue').textContent = q.length;
+}
+
+function setWaiting(on){
+  WAITING = on;
+  applyHeader();
+}
+
+function applyHeader(){
+  const c = chat();
+  const av = document.getElementById('peer-av');
+  const name = document.getElementById('peer-name');
+  const sub = document.getElementById('peer-sub');
+  if(!av) return;
+  if(VIEW === 'agent'){
+    av.textContent = c.initial;
+    name.textContent = c.name;
+    sub.textContent = c.source + '在线咨询 · ' + (c.visits || '第 1 次来访');
+  } else if(VIEW === 'client'){
+    av.textContent = '云';
+    name.textContent = '小云';
+    sub.textContent = WAITING ? '对方正在输入…' : '在线 · 通常 1 分钟内回复';
+  } else {
+    av.textContent = '云';
+    name.textContent = '小云';
+    sub.textContent = '会话调试';
+  }
+}
+
+function switchChat(id){
+  CUR = id;
+  HISTORY = sessionTurns();
+  renderHist();
+  renderThread();
+  renderChatList();
+  applyHeader();
+  const c = chat();
+  document.getElementById('sidebar-company').textContent = c.company || '—';
+  document.getElementById('sidebar-name').textContent = c.name;
+  document.getElementById('sidebar-visits').textContent = c.visits || '第 1 次';
+  document.getElementById('sidebar-tags').innerHTML = (c.tags && c.tags.length)
+    ? c.tags.map(t => '<span>' + t + '</span>').join('') : '<span>—</span>';
+  document.getElementById('sidebar-memo').textContent = c.memo || '无';
+  updateSide();
+}
+
+function takeChat(id){
+  const c = CHATS.find(x => x.id === id);
+  if(!c) return;
+  c.queue = false;
+  c.time = nowHM();
+  c.msgs.push({sys:'会话已接入，可以开始回复'});
+  switchChat(id);
+  toast('已接入 ' + c.name);
+}
+
+const TYPING = '<span class="typing"><i></i><i></i><i></i></span>';
+
+function histMsgs(){
+  const out = [];
+  HISTORY.slice(-MAX_TURNS).forEach(h=>{
+    out.push({role:'user', content: h.q});
+    out.push({role:'assistant', content: h.a});
+  });
+  return out;
+}
+
+function resetThread(){
+  const c = chat();
+  c.msgs = [{role:'bot', html:'在的。想先了解价格，还是系统怎么用？', t: nowHM()}];
+  HISTORY = [];
+  renderHist();
+  renderThread();
+  renderChatList();
+  updateSide();
+}
+
+function toggleTech(){
+  const b = document.getElementById('tech-b');
+  const open = b.style.display === 'none';
+  b.style.display = open ? '' : 'none';
+  document.getElementById('tech-tg').textContent = open ? '收起' : '展开';
+  scrollThread();
+}
+
+function openTech(){
+  document.getElementById('tech-b').style.display = '';
+  document.getElementById('tech-tg').textContent = '收起';
+  scrollThread();
+}
+
+async function run(){
+  const input = document.getElementById('q');
+  const q = input.value.trim();
+  if(!q){ toast('先说点什么'); return; }
+  const btn = document.getElementById('btn');
+  if(btn.disabled) return;
+
+  // 坐席视角：这是人工接管后的回复框，直接作为坐席发言，不进检索
+  if(VIEW === 'agent'){
+    input.value = '';
+    addUser(q);
+    updateSide();
+    return;
+  }
+
+  btn.disabled = true;
+  input.value = '';
+
+  addUser(q);
+  SESSION.turns++;
+  const bi = addBot(TYPING);
+  setWaiting(true);
+
+  /* ---- 会话层：寒暄、身份、转人工，不进检索 ---- */
+  const intent = detectIntent(q);
+  if(intent !== 'rag'){
+    document.getElementById('tech').classList.add('dim');
+    document.getElementById('ans-badge').textContent = '会话';
+    document.getElementById('ans-src').textContent = '';
+    let reply = '';
+    if(apiReady()){
+      try{
+        reply = await askAgent(
+          [{role:'system', content: SYS}, ...histMsgs(), {role:'user', content: q}],
+          {temperature:0.6, max_tokens:600}
+        );
+      }catch(e){ reply = ''; }
+    }
+    if(!reply) reply = REPLY[intent];
+    finishBot(bi, mdToHtml(reply));
+    HISTORY.push({q: q, a: reply});
+    if(HISTORY.length > MAX_TURNS) HISTORY.shift();
+    renderHist(); scrollThread(); updateSide();
+    setWaiting(false);
+    btn.disabled = false;
+    return;
+  }
+
+  /* ---- 业务层：检索 + 判断，然后把资料交给对话模型 ---- */
+  document.getElementById('tech').classList.remove('dim');
+  renderSteps(2);
+
+  let rw = '', rwNote = '';
+  if(RW.on){ rw = await rewriteQuery(q); }
+  const askQ = rw || q;
+
+  let ranked = await rank(q);
+  if(rw){
+    const r2 = await rank(rw);
+    const gain = (r2[0]?.sim || 0) - (ranked[0]?.sim || 0);
+    if(gain > 0.03){ ranked = r2; }
+    else { rw = ''; rwNote = '改写没提高命中，按原句检索'; }
+  }
+  let pool = ranked.slice(0,5).filter(x=>x.sim>0.01);
+  let top = pool.slice(0,3);
+
+  /* 分级判断：这批资料够不够回答这个问题 */
+  let verdict = {ok:false, use:[], missing:'', skip:true};
+  let retried = '';
+  if(pool.length && apiReady()){
+    verdict = await gradeEvidence(askQ, pool);
+    if(verdict.use.length){
+      top = verdict.use.map(i => pool[i]).filter(Boolean).slice(0,3);
+    }
+    if(!verdict.ok && verdict.missing){
+      retried = (askQ + ' ' + verdict.missing).trim();
+      const r2 = await rank(retried);
+      const pool2 = r2.slice(0,5).filter(x=>x.sim>0.01);
+      const v2 = await gradeEvidence(askQ, pool2);
+      if(v2.use.length){
+        pool = pool2;
+        top = v2.use.map(i => pool2[i]).filter(Boolean).slice(0,3);
+        verdict = v2;
+        retried = '按「' + retried + '」重查了一次';
+      } else {
+        retried = '补关键词重查一次，还是没有';
+      }
+    }
+  }
+
+  // 判定说没一条能用时，不直接判死：把前 5 段一起给模型，让它自己挑
+  if(!verdict.use.length && pool.length > top.length){
+    top = pool.slice(0, 5);
+  }
+
+  if(!verdict.skip){
+    SESSION.graded++;
+    if(verdict.use.length) SESSION.hits++;
+    if(verdict.sentiment) SESSION.mood = verdict.sentiment;
+  }
+
+  /* ---- 技术视图：检索结果 ---- */
+  const rwEl = document.getElementById('rw');
+  if(rw){
+    rwEl.style.display = ''; rwEl.innerHTML = `检索用：<b>${rw}</b>　<s>原问题：${q}</s>`;
+  } else if(rwNote){
+    rwEl.style.display = ''; rwEl.innerHTML = `<s>${rwNote}</s>`;
+  } else { rwEl.style.display = 'none'; }
+
+  const byVec = !!(top[0] && top[0].byVec);
+  document.getElementById('hit-r').textContent = byVec
+    ? `共 ${chunks.length} 块参与比较 · 向量检索（${VEC.model}，${VEC.dim} 维）· 余弦相似度`
+      + (verdict.skip ? '' : '　|　证据判断：' + (verdict.use.length ? (verdict.ok ? '够用' : '只有部分能用') : '都不对路'))
+      + (retried ? '　|　' + retried : '')
+    : `共 ${chunks.length} 块参与比较 · 本地 TF-IDF，只看字面重合`;
+  document.getElementById('hits').innerHTML = top.map((x,i)=>`
+    <div class="hit">
+      <div class="top"><div class="rk">${i+1}</div><div class="src">${x.chunk.doc.title}${x.chunk.section ? ' · ' + x.chunk.section : ''} · 第 ${x.chunk.idx+1} 块</div>
+        <div class="sc">相似度 ${(x.sim*100).toFixed(1)}%</div></div>
+      <div class="txt">${hi(x.chunk.text.replace(/\*\*/g,'').replace(/#{1,3}\s/g,''), x.words && x.words.length ? x.words : tokenize(q))}</div>
+    </div>`).join('') || '<div class="empty">没有匹配到相关内容</div>';
+
+  /* ---- 交给对话模型：资料是它的工具，不是答案本身 ---- */
+  const ctx = top.map((x,i)=>`[${i+1}] ${x.chunk.doc.title}${x.chunk.section ? ' · ' + x.chunk.section : ''}\n${x.chunk.text}`).join('\n\n');
+  let evLine;
+  if(!top.length){
+    evLine = '这轮没有检索到任何资料。';
+  } else if(verdict.use.length && verdict.ok){
+    evLine = '检索到下面几段，可以用：\n\n' + ctx;
+  } else if(verdict.use.length){
+    evLine = '只找到部分相关内容：\n\n' + ctx + '\n\n（不一定答全，缺的部分别猜。）';
+  } else {
+    evLine = '检索排在前面的几段如下，不一定对路，你自己判断用不用：\n\n' + ctx + '\n\n（能用就用，用不上就说查不到，别硬套。）';
+  }
+  const turn = '【这一轮检索到的资料】\n' + evLine + '\n\n【用户这句话】\n' + q
+    + (askQ !== q ? '\n【结合前面的对话，这句话问的是】\n' + askQ : '');
+  const histBlock = historyText();
+  const disp = (histBlock ? '【之前的对话】\n' + histBlock + '\n\n' : '')
+    + '【角色设定】\n' + SYS + '\n\n'
+    + '【本轮消息】\n' + turn;
+  document.getElementById('prompt').textContent = disp;
+
+  renderSteps(3);
+  document.getElementById('ans-badge').textContent = apiReady() ? API.model : '本地抽取';
+  document.getElementById('ans-src').textContent = '';
+
+  if(apiReady()){
+    const t0 = Date.now();
+    try{
+      const msgs = [{role:'system', content: SYS}, ...histMsgs(), {role:'user', content: turn}];
+      const txt = await askAgent(msgs, {temperature:0.35, max_tokens:900});
+      finishBot(bi, mdToHtml(txt));
+      HISTORY.push({q: q, a: txt});
+      if(HISTORY.length > MAX_TURNS) HISTORY.shift();
+      renderHist();
+      document.getElementById('ans-src').textContent = ((Date.now()-t0)/1000).toFixed(1) + 's';
+      renderSteps(4);
+      scrollThread(); updateSide();
+    }catch(e){
+      const why = e.name === 'AbortError' ? '超过 60 秒没有返回' : e.message;
+      const src = document.getElementById('ans-src');
+      if(src) src.textContent = why;
+      finishBot(bi, '<span style="color:#dc2626">这条没发出去，请稍后再说一次。</span>');
+    }
+  } else {
+    const a = extractAnswer(top, q);
+    finishBot(bi, a);
+    HISTORY.push({q: q, a: a.replace(/<[^>]+>/g,'').slice(0, 300)});
+    if(HISTORY.length > MAX_TURNS) HISTORY.shift();
+    renderHist();
+    renderSteps(4);
+    scrollThread();
+  }
+
+  setWaiting(false);
+  btn.disabled = false;
+}
+
+function askSample(q){
+  document.getElementById('q').value = q;
+  run();
+}
+
+function extractAnswer(top, q){
+  if(!top.length) return '资料中没有找到相关内容。';
+  const words = tokenize(q);
+  let best = [], bestScore = -1;
+  top.forEach(x=>{
+    x.chunk.text.split(/(?<=[。！？])/).forEach(s=>{
+      if(!s.trim()) return;
+      let sc = 0;
+      words.forEach(w=>{ if(s.includes(w)) sc++; });
+      if(sc > bestScore){ bestScore = sc; best = [s.trim()]; }
+      else if(sc === bestScore && sc > 0) best.push(s.trim());
+    });
+  });
+  const body = best.slice(0,2).join('');
+  return `${body}\n<div class="note">这段是从最相关的资料里摘出来的。点右上角「接口设置」，填任意一家 OpenAI 兼容的服务，再问一次，模型会用它组织成自然语言回答——那就是完整的 RAG。</div>`;
+}
+
+/* 上传文档：读成文本，加进知识库，重建索引 */
+function uploadDocs(e){
+  const files = Array.from(e.target.files || []);
+  if(!files.length) return;
+  let done = 0;
+  files.forEach((f, i)=>{
+    const r = new FileReader();
+    r.onload = ()=>{
+      const txt = String(r.result || '').trim();
+      if(txt){
+        DOCS.push({
+          id:'u' + Date.now() + i,
+          title: f.name.replace(/\.(txt|md|csv)$/i, ''),
+          text: txt
+        });
+      }
+      if(++done === files.length){
+        splitChunks(); buildIndex(); renderDocs();
+        if(VEC.ready){ VEC = {ready:false, dim:0, model:''}; localStorage.removeItem('rag_vec'); renderStats(); toast('文档变了，需要重建向量索引'); }
+        toast(`已加入 ${files.length} 份文档，重新切块 ${chunks.length} 块`);
+        e.target.value = '';
+      }
+    };
+    r.readAsText(f, 'utf-8');
+  });
+}
+
+const DEMO_DOCS = JSON.parse(JSON.stringify(DOCS));
+
+function resetDocs(){
+  DOCS.length = 0;
+  DEMO_DOCS.forEach(d => DOCS.push({id:d.id, title:d.title, text:d.text}));
+  VEC = {ready:false, dim:0, model:''};
+  localStorage.removeItem('rag_vec');
+  splitChunks(); buildIndex(); renderDocs(); renderStats();
+  resetThread();
+  toast('已恢复 ' + DOCS.length + ' 份示例文档，共 ' + chunks.length + ' 块');
+}
+
+function clearSecrets(){
+  if(!confirm('清除本机保存的接口配置、Key 和向量缓存？文档不受影响。')) return;
+  ['rag_api','rag_emb','rag_vec'].forEach(k => localStorage.removeItem(k));
+  API = {preset:'sensenova', base:CHAT_PRESETS.sensenova.base, model:CHAT_PRESETS.sensenova.model, key:''};
+  EMB = {preset:'siliconflow', base:EMB_PRESETS.siliconflow.base, model:EMB_PRESETS.siliconflow.model, key:''};
+  VEC = {ready:false, dim:0, model:''};
+  chunks.forEach(c => { c.vec = null; });
+  loadApi();
+  renderStats();
+  toast('已清除本机配置');
+}
+
+function clearDocs(){
+  if(!confirm('清空全部文档？内置的示范文档也会一起清掉。')) return;
+  DOCS.length = 0;
+  chunks = []; vocab = []; idf = {};
+  VEC = {ready:false, dim:0, model:''};
+  localStorage.removeItem('rag_vec');
+  splitChunks(); buildIndex(); renderDocs(); renderStats();
+  resetThread();
+  toast('知识库已清空');
+}
+
+function reset(){
+  document.getElementById('q').value = '';
+  resetThread();
+  renderSteps(-1);
+}
+
+/* ============ 启动 ============ */
+async function demoBoot(){
+  if(!DEMO_MODE) return;
+  let proxyOk = false;
+  try{
+    const r = await fetch('http://127.0.0.1:8890/v1/models', {
+      headers: {'Authorization': 'Bearer ' + DEMO_CHAT.key},
+      signal: AbortSignal.timeout(1500)
+    });
+    proxyOk = r.status < 500;
+  }catch(e){ proxyOk = false; }
+  if(!proxyOk){
+    API = Object.assign({}, DEMO_CHAT_FALLBACK);
+  }
+  const bubble = document.getElementById('demo-tip');
+  if(bubble && VIEW === 'admin'){
+    bubble.innerHTML = proxyOk
+      ? '对话走商汤（本地代理已连上）· 向量走硅基 bge-m3'
+      : '对话走硅基 GLM（商汤代理没开，自动切换）· 向量走硅基 bge-m3';
+    bubble.style.display = 'block';
+    setTimeout(()=>{ bubble.style.opacity = '0'; }, 6000);
+  }
+}
+
+loadApi();
+RW.on = localStorage.getItem('rag_rw') === '1';
+document.getElementById('rw-on').checked = RW.on;
+splitChunks();
+buildIndex();
+renderDocs();
+renderStats();
+const restored = loadVecCache();
+if(restored && VIEW === 'admin') toast('已恢复向量索引（' + VEC.dim + ' 维）');
+renderSamples();
+renderChatList();
+switchChat('c1');
+if(!chat().msgs.length) resetThread();
+setView(VIEW);
+demoBoot().then(()=>{
+  fillApiDom();
+  if(!restored && embReady()) buildVectors();
+});
+renderSteps(-1);
+</script>
+</body>
+</html>
